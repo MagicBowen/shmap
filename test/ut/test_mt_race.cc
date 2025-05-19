@@ -46,11 +46,11 @@ static Fix32 make_key(std::size_t id)
     return k;
 }
 
-struct ShmapRaceTtest : public testing::Test {
+struct ShmapMtRaceTtest : public testing::Test {
 protected:
 };
     
-TEST_F(ShmapRaceTtest, shm_race_test) 
+TEST_F(ShmapMtRaceTtest, shm_race_test) 
 {
     const std::size_t NUM_THREADS =
         std::max(4u, std::thread::hardware_concurrency() * 2u);
