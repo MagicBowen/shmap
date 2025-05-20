@@ -62,7 +62,7 @@ struct FixedString {
     }
 
 private:
-    inline static constexpr std::size_t FIXED_STRING_LEN_MAX{128};
+    static constexpr std::size_t FIXED_STRING_LEN_MAX{128};
     std::array<char, FIXED_STRING_LEN_MAX> chars{};
 
 private:
