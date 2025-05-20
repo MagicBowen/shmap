@@ -7,6 +7,7 @@
 
 #include <string_view>
 #include <cstring>
+#include <cstdarg>
 #include <string>
 #include <array>
 #include <ostream>
@@ -147,7 +148,7 @@ namespace std {
 
     template<>
     struct equal_to<shmap::FixedString> {
-        constexpr bool operator()(const shmap::FixedString& lhs, const shmap::FixedString& rhs) const noexcept {
+        bool operator()(const shmap::FixedString& lhs, const shmap::FixedString& rhs) const noexcept {
             return lhs == rhs;
         }
     };
