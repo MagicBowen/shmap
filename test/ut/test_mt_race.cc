@@ -10,41 +10,16 @@
 #include <new>
 
 #include "shmap.h"
+#include "fixed_string.h"
 
 using namespace shmap;
 
 namespace {
-    using Fix32 = std::array<char, 32>;
-
-    static Fix32 make_key(std::size_t id) {
-        Fix32 k{};
-        std::snprintf(k.data(), 32, "key_%04zu", id);
-        return k;
-    }
-
-    struct FixHash {
-        std::size_t operator()(const Fix32& s) const noexcept {
-            std::size_t h = 14695981039346656037ull;
-            for(char c : s) {
-                if(c == 0) break;
-                h ^= static_cast<unsigned char>(c);
-                h *= 1099511628211ull;
-            }
-            return h;
-        }
-    };
-
-    struct FixEq {
-        bool operator()(const Fix32& a, const Fix32& b) const noexcept {
-            return std::memcmp(a.data(), b.data(), 32) == 0;
-        }
-    };
-
-    static constexpr std::size_t CAP      = 1 << 14;     // 16 384 buckets
+    static constexpr std::size_t CAPACITY = 1 << 14;     // 16 384 buckets
     static constexpr std::size_t N_KEYS   = 1'000;
-    static constexpr std::size_t OPS      = 100'000;     // 每线程操作数
+    static constexpr std::size_t OPS      = 100'000;     // operator count per thread
 
-    using Map   = ShmTable<Fix32, int, CAP, FixHash, FixEq>;
+    using Map   = ShmTable<FixedString, int, CAPACITY>;
     using Block = ShmBlock<Map>;
 }
 
@@ -76,7 +51,7 @@ TEST_F(ShmapMtRaceTtest, shmap_multi_threads_race_test)
     }
 
     auto worker = [&](int tid) {
-        /* 50 % 概率尝试 create，50 % 概率 open */
+        // 50 % try create，50 % try open
         Block* blk = (tid & 1) ? Block::Create(sharedMem_)
                                : Block::Open(sharedMem_);
         Map& table_ = blk->table_;
@@ -87,12 +62,12 @@ TEST_F(ShmapMtRaceTtest, shmap_multi_threads_race_test)
 
         for(std::size_t i = 0; i < OPS; ++i) {
             int id  = key_dist(rng);
-            Fix32 k = make_key(id);
+            auto k = FixedString::FromFormat("key_%04zu", id);
 
             int op  = op_dist(rng);
 
             if(op < 70) {
-                /* 70 % 概率：插入 / 修改（带写）*/
+                // 70 % insert / modify
                 table_.Visit(k,
                     [&](int& v, bool created){
                         (void)created;
@@ -102,7 +77,7 @@ TEST_F(ShmapMtRaceTtest, shmap_multi_threads_race_test)
                 expected[id].fetch_add(1, std::memory_order_relaxed);
             }
             else {
-                /* 30 % 纯读 */
+                // 30 % only read
                 int gotValue = 0;
                 bool seen = table_.Visit(k,
                     [&gotValue](int& value, bool neu){ 
@@ -112,7 +87,7 @@ TEST_F(ShmapMtRaceTtest, shmap_multi_threads_race_test)
                     /* create_if_missing = */ false);
 
                 if(seen) {
-                    /* 随机读取几次以增强并发读比例 */
+                    // Read for racing
                     table_.Visit(k, [&gotValue](int& value, bool neu){
                         ASSERT_TRUE(value >= gotValue);
                         ASSERT_TRUE(value > 0 && value < OPS);
@@ -139,7 +114,7 @@ TEST_F(ShmapMtRaceTtest, shmap_multi_threads_race_test)
     Map&   table_ = blk->table_;
 
     for(std::size_t id = 0; id < N_KEYS; ++id) {
-        Fix32 k = make_key(id);
+        auto k = FixedString::FromFormat("key_%04zu", id);
         int got = 0;
 
         bool have = table_.Visit(k,

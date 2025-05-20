@@ -12,43 +12,19 @@
 #include <unistd.h>
 
 #include "shmap.h"
+#include "fixed_string.h"
 
 using namespace shmap;
 
 namespace {
-    using Fix32 = std::array<char,32>;
-
-    struct Hash {
-        std::size_t operator()(const Fix32&s) const noexcept {
-            std::size_t h=14695981039346656037ull;
-            for(char c:s){ 
-                if(!c) break;
-                h^=(unsigned char)c; 
-                h*=1099511628211ull; 
-            }
-            return h;
-        }
-    };
-    struct Eq {
-        bool operator()(const Fix32&a,const Fix32&b) const noexcept {
-            return std::memcmp(a.data(),b.data(),32)==0;
-        }
-    };
-
-    constexpr std::size_t CAP     = 1<<14;   // 16 384 buckets
-    constexpr std::size_t N_KEYS  = 1'000;
+    constexpr std::size_t CAPACITY     = 1<<14;   // 16 384 buckets
+    constexpr std::size_t N_KEYS       = 1'000;
     constexpr std::size_t PER_PROC_OPS = 50'000;
-    constexpr int         N_PROC  = 8;       // 并发进程数
-    constexpr int         N_THR   = 4;       // 每进程再起 4 线程
+    constexpr int         N_PROC       = 8;       // process count
+    constexpr int         N_THR        = 4;       // thread per process
 
-    using Map   = ShmTable<Fix32, int, CAP, Hash, Eq>;
+    using Map   = ShmTable<FixedString, int, CAPACITY>;
     using Block = ShmBlock<Map>;
-
-    static Fix32 make_key(std::size_t id) {
-        Fix32 k{}; 
-        std::snprintf(k.data(),32,"key_%04zu",id); 
-        return k;
-    } 
 
     const char* SHM_PATH = "/shmap_mp_test";
 }
@@ -75,7 +51,7 @@ protected:
     }
 
 protected:
-    void worker_process() {
+    void WorkerProcess() {
         int fd = shm_open(SHM_PATH, O_RDWR, 0600);
         void* mem = mmap(nullptr, Block::GetMemUsage(), PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
         close(fd);
@@ -90,9 +66,9 @@ protected:
 
             for(std::size_t i = 0; i < PER_PROC_OPS; ++i){
                 int id = kd(rng);
-                Fix32 k = make_key(id);
+                auto k = FixedString::FromFormat("%d", id);
 
-                /* 70 % 写， 30 % 纯读 */
+                // 70 % write， 30 % read */
                 if(i % 10 < 7){
                     mp.Visit(k, [](int&v,bool){ v+=1; }, true);
                 } else {
@@ -119,7 +95,7 @@ TEST_F(ShmapMpRaceTtest, shm_race_test)
 {
     for(int i = 0; i < N_PROC; ++i){
         pid_t pid = fork();
-        if(pid==0) worker_process();
+        if(pid==0) WorkerProcess();
     }
 
     while(wait(nullptr) > 0) {}
@@ -129,7 +105,7 @@ TEST_F(ShmapMpRaceTtest, shm_race_test)
 
     long long total = 0;
     for(std::size_t id = 0; id < N_KEYS; ++id){
-        Fix32 k = make_key(id);
+        auto k = FixedString::FromFormat("%d", id);
         mp.Visit(k,
             [&](int&v,bool){
                  total+=v; 

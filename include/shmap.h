@@ -71,28 +71,28 @@ public:
             while(true) {
                 auto curState = b.state.load(std::memory_order_acquire);
 
-                /* Already has item */
+                // Already has item
                 if(curState == Bucket::READY) {
                     if(!key_equal_(b.key, k)) {
                         /* hash conflict, jump out to find next*/
                         break;
                     }
 
-                    /* Preempt the write permission to ensure exclusivity */
+                    // Preempt the write permission to ensure exclusivity
                     auto expectedState = Bucket::READY;
                     if(!b.state.compare_exchange_strong(expectedState, Bucket::ACCESSING,
                             std::memory_order_acquire, std::memory_order_relaxed)) {
-                       /* Occupied by other writers, retry or yield in next loop */
+                       // Occupied by other writers, retry or yield in next loop
                         continue;
                     }
 
-                    /* Begin accessing */
+                    // Begin accessing
                     std::forward<Visitor>(visit)(b.value, false);
                     b.state.store(Bucket::READY, std::memory_order_release);
                     return true;
                 }
 
-                /* Try inserting */
+                // Try inserting
                 if(curState == Bucket::EMPTY && create_if_missing) {
                     auto expectedState = Bucket::EMPTY;
                     if(!b.state.compare_exchange_strong(expectedState, Bucket::INSERTING,
@@ -101,7 +101,7 @@ public:
                         continue;
                     }
 
-                    /* Inserting key/value */
+                    // Inserting key/value
                     b.key   = k;
                     b.value = VALUE{}; // Default construct
                     std::forward<Visitor>(visit)(b.value, true); // Modify content by visitor
@@ -110,12 +110,12 @@ public:
                     return true;
                 }
 
-                /* Only read but find none */
+                // Only read but find none
                 if(curState == Bucket::EMPTY && !create_if_missing) {
                     return false;
                 }
 
-                /* Waiting for inserting or modifying to end */
+                // Waiting for inserting or modifying to end
                 std::this_thread::yield();
             }
         }
@@ -176,7 +176,7 @@ private:
             std::this_thread::yield();
     }
 };
-   
+
 }
 
 #endif

@@ -7,28 +7,12 @@
 #include <iostream>
 
 #include "shmap.h"
+#include "fixed_string.h"
 
 using namespace shmap;
 
 namespace {
-    using Fix32 = std::array<char,32>;
-
-    struct FHash {
-        std::size_t operator()(const Fix32& s) const noexcept {
-            std::size_t h=14695981039346656037ull;
-            for(char c:s){ if(c==0) break;
-                h ^= static_cast<unsigned char>(c);
-                h *= 1099511628211ull;
-            } return h;
-        }
-    };
-    struct FEq {
-        bool operator()(const Fix32& a,const Fix32& b)const noexcept {
-            return std::memcmp(a.data(),b.data(),32)==0;
-        }
-    };
-
-    using Map   = ShmTable<Fix32, int, 8, FHash, FEq>;
+    using Map   = ShmTable<FixedString, int, 8>;
     using Block = ShmBlock<Map>;
 }
 
@@ -65,7 +49,7 @@ TEST_F(ShmapTtest, shm_base_test) {
 
     Map* table_ = &blk->table_;
 
-    Fix32 k{}; std::strncpy(k.data(),"cnt",32);
+    FixedString k = FixedString::FromString("cnt");
 
     table_->Visit(k,
         [](int& v,bool created){ v += 1+created; }, true);
