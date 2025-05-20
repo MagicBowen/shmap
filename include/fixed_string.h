@@ -61,6 +61,11 @@ struct FixedString {
         }
     }
 
+    FixedString& operator= (const std::string& src) {
+        Store(src);
+        return *this;
+    }
+
 private:
     static constexpr std::size_t FIXED_STRING_LEN_MAX{128};
     std::array<char, FIXED_STRING_LEN_MAX> chars{};
