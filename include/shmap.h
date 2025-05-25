@@ -12,6 +12,7 @@
 #include <atomic>
 #include <thread>
 #include <string>
+#include <chrono>
 #include <new>
 
 #if defined(__unix__) || defined(__APPLE__)
@@ -30,6 +31,39 @@ namespace shmap {
 #else
     constexpr std::size_t CACHE_LINE_SIZE = 64;
 #endif
+
+// ----------------------------------------
+// Backoff wait + timeout helper
+// ----------------------------------------
+struct Backoff {
+    Backoff(std::chrono::nanoseconds to)
+        : start_(Clock::now()), timeout_(to) {}
+
+    // one backoff step; return false if overall timeout exceeded
+    bool next() {
+        if (Clock::now() - start_ > timeout_) return false;
+
+        if (spin_ < YIELD_LIMIT) {
+            std::this_thread::yield();
+        } else {
+            int  exp = std::min(spin_ - YIELD_LIMIT, MAX_BACKOFF_EXP);
+            auto nanos = std::chrono::nanoseconds(1LL << exp);
+            std::this_thread::sleep_for(nanos);
+        }
+        ++spin_;
+        return true;
+    }
+private:
+    using Clock = std::chrono::steady_clock;
+    Clock::time_point start_;
+    std::chrono::nanoseconds timeout_;
+    int spin_{0};
+
+    // first N attempts use yield()
+    static constexpr int  YIELD_LIMIT      = 10;
+    // exponent cap: 1 << MAX_BACKOFF_EXP ns ~1ms
+    static constexpr int  MAX_BACKOFF_EXP  = 20;
+};
 
 /* -------------------------------------------------------------------------- */
 /*                              Bucket definition                             */
@@ -56,7 +90,8 @@ enum class AccessMode : uint8_t {
 /* -------------------------------------------------------------------------- */
 template<typename KEY, typename VALUE, std::size_t CAPACITY,
     typename HASH  = std::hash<KEY>,
-    typename EQUAL = std::equal_to<KEY>
+    typename EQUAL = std::equal_to<KEY>,
+    bool ROLLBACK_ENABLE = false
 >
 struct ShmHashTable {
     static_assert(CAPACITY > 0, "CAPACITY must be > 0");
@@ -69,66 +104,77 @@ struct ShmHashTable {
     ShmHashTable() = default; // Only used for placement-new
 
     template<typename Visitor>
-    bool Visit(const KEY& k, AccessMode mode, Visitor&& visit) noexcept {
+    bool Visit(const KEY& key, AccessMode mode, Visitor&& visitor,
+        std::chrono::nanoseconds timeout = std::chrono::seconds(5)) noexcept {
+            
+        Backoff backoff(timeout);
+        const std::size_t idx = hasher_(key) % CAPACITY;
 
-        std::size_t idx = hasher_(k) % CAPACITY;
+        for (std::size_t probe = 0; probe < CAPACITY; ++probe) {
+            Bucket& b = buckets_[(idx + probe) % CAPACITY];
 
-        for(std::size_t probe = 0; probe < CAPACITY; ++probe, idx = (idx + 1) % CAPACITY) {
+            while (true) {
+                auto state = b.state.load(std::memory_order_acquire);
 
-            Bucket& b = buckets_[idx];
+                // Existing READY slot
+                if (state == Bucket::READY) {
+                    if (!keyEq_(b.key, key)) break; // collision
 
-            while(true) {
-                auto curState = b.state.load(std::memory_order_acquire);
-
-                // Already has item
-                if(curState == Bucket::READY) {
-                    if(!keyEq_(b.key, k)) {
-                        /* hash conflict, jump out to find next*/
-                        break;
-                    }
-
-                    // Preempt the write permission to ensure exclusivity
-                    auto expectedState = Bucket::READY;
-                    if(!b.state.compare_exchange_strong(expectedState, Bucket::ACCESSING,
+                    auto expectState = Bucket::READY;
+                    if (!b.state.compare_exchange_strong(expectState, Bucket::ACCESSING,
                             std::memory_order_acq_rel, std::memory_order_acquire)) {
-                       // Occupied by other writers, retry or yield in next loop
+                        if (!backoff.next()) return false;
                         continue;
                     }
 
-                    // Begin accessing
-                    std::forward<Visitor>(visit)(idx, b.value, false);
+                    // Maybe save old value
+                    VALUE old{};
+                    VALUE* old_ptr = nullptr;
+                    if constexpr (ROLLBACK_ENABLE) {
+                        old = b.value;
+                        old_ptr = &old;
+                    }
+
+                    bool ok = ApplyVisitor(std::forward<Visitor>(visitor), (idx + probe) % CAPACITY, b.value, false,old_ptr);
+
                     b.state.store(Bucket::READY, std::memory_order_release);
-                    return true;
+                    return ok;
                 }
 
-                // Try inserting
-                if(curState == Bucket::EMPTY && mode == AccessMode::CreateIfMiss) {
-                    auto expectedState = Bucket::EMPTY;
-                    if(!b.state.compare_exchange_strong(expectedState, Bucket::INSERTING,
+                // Empty && Create
+                if (state == Bucket::EMPTY && mode == AccessMode::CreateIfMiss) {
+                    uint32_t expectState = Bucket::EMPTY;
+                    if (!b.state.compare_exchange_strong(expectState, Bucket::INSERTING,
                             std::memory_order_acq_rel, std::memory_order_acquire)) {
-                        /* Race failed, retry or yield in next loop */
+                        if (!backoff.next()) return false;
                         continue;
                     }
 
-                    // Inserting key/value
-                    b.key   = k;
-                    b.value = VALUE{}; // Default construct before modify
-                    std::forward<Visitor>(visit)(idx, b.value, true); // Modify content by visitor
+                    b.key   = key;
+                    b.value = VALUE{};
 
+                    VALUE old_dummy{};
+                    VALUE* old_ptr = ROLLBACK_ENABLE ? &old_dummy : nullptr;
+                    bool ok = ApplyVisitor(std::forward<Visitor>(visitor), (idx + probe) % CAPACITY, b.value, true, old_ptr);
+
+                    if (!ok && ROLLBACK_ENABLE) {
+                        b.state.store(Bucket::EMPTY, std::memory_order_release);
+                        return false;
+                    }
                     b.state.store(Bucket::READY, std::memory_order_release);
-                    return true;
+                    return ok;
                 }
 
-                // Only read but find none
-                if(curState == Bucket::EMPTY && mode == AccessMode::AccessExist) {
+                // Empty && Read-only miss
+                if (state == Bucket::EMPTY && mode == AccessMode::AccessExist) {
                     return false;
                 }
 
-                // Waiting for inserting or modifying to end
-                std::this_thread::yield();
+                // Otherwise waiting
+                if (!backoff.next()) return false;
             }
         }
-        return false; // Probe failed
+        return false; // table full or timeout
     }
 
     template<typename Visitor>
@@ -154,6 +200,28 @@ struct ShmHashTable {
                 }
             }
         }
+    }
+
+private:
+    template<typename Visitor>
+    bool ApplyVisitor(Visitor&& visit, std::size_t idx, VALUE& value, bool isNew,
+        VALUE* oldValue /* non-null only if rollback enabled */) noexcept {
+        bool result = true;
+        try {
+            if constexpr (std::is_same_v<std::invoke_result_t<Visitor, std::size_t, VALUE&, bool>, void>) {
+                // void visitor -> always success
+                std::forward<Visitor>(visit)(idx, value, isNew);
+            } else {
+                result = std::forward<Visitor>(visit)(idx, value, isNew);
+            }
+        } catch (...) {
+            result = false;
+        }
+        if (!result && oldValue) {
+            // roll back
+            value = *oldValue;
+        }
+        return result;
     }
 
 private:
