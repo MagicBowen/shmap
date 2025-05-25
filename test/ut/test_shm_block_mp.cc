@@ -23,7 +23,7 @@ namespace {
     constexpr int         N_PROC       = 8;       // process count
     constexpr int         N_THR        = 4;       // thread per process
 
-    using Map   = ShmTable<FixedString, int, CAPACITY>;
+    using Map   = ShmHashTable<FixedString, int, CAPACITY>;
     using Block = ShmBlock<Map>;
 
     const char* SHM_PATH = "/shm_block_mp_test";

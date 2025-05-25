@@ -9,7 +9,7 @@
 
 using namespace shmap;
 
-using Table = ShmTable<int, int, 1024>;
+using Table = ShmHashTable<int, int, 1024>;
 
 TEST(ShmTable_Concurrent, ParallelInsertDistinct) {
     Table tbl;

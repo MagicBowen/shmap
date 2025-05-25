@@ -13,7 +13,7 @@ using namespace shmap;
 
 namespace {
     struct ShmPath { static constexpr const char* value = "/shm_storage_test"; };
-    using Storage = ShmStorage<ShmTable<FixedString, int, 8>, ShmPath>;
+    using Storage = ShmStorage<ShmHashTable<FixedString, int, 8>, ShmPath>;
 }
 
 struct ShmStorgeTest : public testing::Test {

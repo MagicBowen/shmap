@@ -8,7 +8,7 @@
 
 using namespace shmap;
 
-using Table = ShmTable<int, FixedString, 16>;
+using Table = ShmHashTable<int, FixedString, 16>;
 
 TEST(ShmTable_Basic, InsertAndAccess) {
     Table tbl;

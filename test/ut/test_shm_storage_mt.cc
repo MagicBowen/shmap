@@ -16,7 +16,7 @@ namespace {
         static constexpr const char* value = "/shm_storage_mt_test";
     };
 
-    using Table = ShmTable<int, int, 128>;
+    using Table = ShmHashTable<int, int, 128>;
     using Storage = ShmStorage<Table, ShmPath>;
 }
 

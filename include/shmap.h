@@ -52,13 +52,13 @@ enum class AccessMode : uint8_t {
 };
 
 /* -------------------------------------------------------------------------- */
-/*                     ShmTable  (lock-free closed hashing table)             */
+/*                     ShmHashTable  (lock-free closed hashing table)             */
 /* -------------------------------------------------------------------------- */
 template<typename KEY, typename VALUE, std::size_t CAPACITY,
     typename HASH  = std::hash<KEY>,
     typename EQUAL = std::equal_to<KEY>
 >
-struct ShmTable {
+struct ShmHashTable {
     static_assert(CAPACITY > 0, "CAPACITY must be > 0");
     static_assert(std::is_trivially_copyable<KEY>::value,   "KEY must be trivially copyable");
     static_assert(std::is_trivially_copyable<VALUE>::value, "VALUE must be trivially copyable");
@@ -66,7 +66,7 @@ struct ShmTable {
     using Bucket = ShmBucket<KEY,VALUE>;
     static_assert(sizeof(Bucket) % CACHE_LINE_SIZE == 0,  "Bucket must be cache-line multiple");
 
-    ShmTable() = default; // Only used for placement-new
+    ShmHashTable() = default; // Only used for placement-new
 
     template<typename Visitor>
     bool Visit(const KEY& k, AccessMode mode, Visitor&& visit) noexcept {

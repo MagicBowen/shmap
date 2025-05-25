@@ -19,7 +19,7 @@ namespace {
     static constexpr std::size_t N_KEYS   = 1'000;
     static constexpr std::size_t OPS      = 100'000;     // operator count per thread
 
-    using Map   = ShmTable<FixedString, int, CAPACITY>;
+    using Map   = ShmHashTable<FixedString, int, CAPACITY>;
     using Block = ShmBlock<Map>;
 }
 
