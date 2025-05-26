@@ -21,7 +21,7 @@ TEST(ShmTable_Basic, InsertAndAccess) {
 
     bool found = tbl.Visit(42, AccessMode::AccessExist,
         [&](size_t idx, FixedString& val, bool){
-            ASSERT_EQ(val, "hello");
+            ASSERT_EQ(val, FixedString("hello"));
         });
     ASSERT_TRUE(found);
 
@@ -34,7 +34,7 @@ TEST(ShmTable_Basic, InsertAndAccess) {
 
     bool found2 = tbl.Visit(42, AccessMode::AccessExist,
         [&](size_t, FixedString& v, bool){
-            ASSERT_EQ(v, "world");
+            ASSERT_EQ(v, FixedString("world"));
         });
     ASSERT_TRUE(found2);
 }

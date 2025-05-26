@@ -49,6 +49,10 @@ struct FixedString {
         Store(str);
     }
 
+    FixedString(const char* cstr) {
+        Store(std::string(cstr));
+    }
+
     std::string ToString() const {
         const char* begin = chars_.data();
         const char* end = static_cast<const char*>(std::memchr(begin, '\0', FIXED_STRING_LEN_MAX));
@@ -64,6 +68,12 @@ struct FixedString {
         Store(src);
         return *this;
     }
+
+    FixedString& operator= (const char* cstr) {
+        Store(std::string(cstr));
+        return *this;
+    }
+
 private:
     void Store(const std::string& src) {
         std::size_t copy_len = std::min(src.size(), FIXED_STRING_LEN_MAX);
