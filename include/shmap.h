@@ -5,6 +5,8 @@
 #ifndef SHMAP_HPP_
 #define SHMAP_HPP_
 
+#include "shmap_log.h"
+
 #include <type_traits>
 #include <cstddef>
 #include <cstdint>
@@ -246,10 +248,12 @@ struct ShmBlock {
                 std::memory_order_acq_rel, std::memory_order_acquire)) {
             new (&block->table_) TABLE();
             block->state.store(READY, std::memory_order_release);
+            SHMAP_LOG("ShmBlock create and new block!");
             return block;
         }
         else {
             block->WaitReady();
+            SHMAP_LOG("ShmBlock create and wait block!");
             return block;
         }
     }
@@ -257,6 +261,7 @@ struct ShmBlock {
     static ShmBlock* Open(void* mem) noexcept {
         auto* block = static_cast<ShmBlock*>(mem);
         block->WaitReady();
+        SHMAP_LOG("ShmBlock open and wait block!");
         return block;
     }
 
@@ -317,6 +322,8 @@ private:
     ShmStorage() {
         constexpr const char* path = SHM_PATH::value;
 
+        SHMAP_LOG("ShmStorage construct %s!", SHM_PATH::value);
+
         fd_ = ::shm_open(path, O_RDWR | O_CREAT | O_EXCL, 0666);
 
         if (fd_ >= 0) {
@@ -367,7 +374,8 @@ private:
         if (fd_ >= 0) {
             ::close(fd_);
             fd_ = -1;
-        }     
+        }
+        SHMAP_LOG("ShmStorage close %s!", SHM_PATH::value);
     }
 
 private:
