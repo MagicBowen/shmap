@@ -128,9 +128,9 @@ private:
     }    
 };
 
-// Main BitPackInteger class
+// Main BitsInteger class
 template<typename UnderlyingType, typename EnumType, typename... Fields>
-class BitPackInteger {
+class BitsInteger {
     static_assert(std::is_unsigned_v<UnderlyingType>, "Underlying type must be unsigned");
     static_assert(std::is_enum_v<EnumType>, "EnumType must be an enum");
     
@@ -146,19 +146,19 @@ public:
     using underlying_type = UnderlyingType;
     using enum_type = EnumType;
     
-    constexpr BitPackInteger() noexcept 
+    constexpr BitsInteger() noexcept 
     : value_(0) {}
     
-    explicit constexpr BitPackInteger(UnderlyingType value) noexcept 
+    explicit constexpr BitsInteger(UnderlyingType value) noexcept 
     : value_(value) {}
     
-    constexpr BitPackInteger(const BitPackInteger&) noexcept = default;
-    constexpr BitPackInteger(BitPackInteger&&) noexcept = default;
+    constexpr BitsInteger(const BitsInteger&) noexcept = default;
+    constexpr BitsInteger(BitsInteger&&) noexcept = default;
 
-    BitPackInteger& operator=(const BitPackInteger&) noexcept = default;
-    BitPackInteger& operator=(BitPackInteger&&) noexcept = default;
+    BitsInteger& operator=(const BitsInteger&) noexcept = default;
+    BitsInteger& operator=(BitsInteger&&) noexcept = default;
     
-    BitPackInteger& operator=(UnderlyingType value) noexcept {
+    BitsInteger& operator=(UnderlyingType value) noexcept {
         value_ = value;
         return *this;
     }
@@ -170,7 +170,7 @@ public:
     template<EnumType E>
     void Set(UnderlyingType value) {
         using Field = typename detail::FindField<EnumType, E, Fields...>::type;
-        static_assert(!std::is_void_v<Field>, "Invalid enum value for this BitPackInteger");
+        static_assert(!std::is_void_v<Field>, "Invalid enum value for this BitsInteger");
         
         value_ = Field::template InsertValue<UnderlyingType>(value_, value);
     }
@@ -178,7 +178,7 @@ public:
     template<EnumType E>
     constexpr UnderlyingType Get() const {
         using Field = typename detail::FindField<EnumType, E, Fields...>::type;
-        static_assert(!std::is_void_v<Field>, "Invalid enum value for this BitPackInteger");
+        static_assert(!std::is_void_v<Field>, "Invalid enum value for this BitsInteger");
         
         return Field::template ExtractValue<UnderlyingType>(value_);
     }
@@ -195,31 +195,31 @@ public:
         value_ = 0;
     }        
     
-    friend constexpr bool operator==(const BitPackInteger& lhs, const BitPackInteger& rhs) noexcept {
+    friend constexpr bool operator==(const BitsInteger& lhs, const BitsInteger& rhs) noexcept {
         return lhs.value_ == rhs.value_;
     }
     
-    friend constexpr bool operator!=(const BitPackInteger& lhs, const BitPackInteger& rhs) noexcept {
+    friend constexpr bool operator!=(const BitsInteger& lhs, const BitsInteger& rhs) noexcept {
         return lhs.value_ != rhs.value_;
     }
     
     template<typename T, typename = std::enable_if_t<std::is_integral_v<T>>>
-    friend constexpr bool operator==(const BitPackInteger& lhs, T rhs) noexcept {
+    friend constexpr bool operator==(const BitsInteger& lhs, T rhs) noexcept {
         return lhs.value_ == static_cast<UnderlyingType>(rhs);
     }
     
     template<typename T, typename = std::enable_if_t<std::is_integral_v<T>>>
-    friend constexpr bool operator!=(const BitPackInteger& lhs, T rhs) noexcept {
+    friend constexpr bool operator!=(const BitsInteger& lhs, T rhs) noexcept {
         return lhs.value_ != static_cast<UnderlyingType>(rhs);
     }
     
     template<typename T, typename = std::enable_if_t<std::is_integral_v<T>>>
-    friend constexpr bool operator==(T lhs, const BitPackInteger& rhs) noexcept {
+    friend constexpr bool operator==(T lhs, const BitsInteger& rhs) noexcept {
         return static_cast<UnderlyingType>(lhs) == rhs.value_;
     }
     
     template<typename T, typename = std::enable_if_t<std::is_integral_v<T>>>
-    friend constexpr bool operator!=(T lhs, const BitPackInteger& rhs) noexcept {
+    friend constexpr bool operator!=(T lhs, const BitsInteger& rhs) noexcept {
         return static_cast<UnderlyingType>(lhs) != rhs.value_;
     }
     

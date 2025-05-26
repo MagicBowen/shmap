@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include "bit_field.h"
+#include "bits_integer.h"
 
 using namespace shmap;
 
@@ -13,7 +13,7 @@ namespace {
     using GreenField = BitField<ColorComponent, ColorComponent::Green, 3, 3>;
     using BlueField  = BitField<ColorComponent, ColorComponent::Blue,  6, 2>;
 
-    using ColorBitField = BitPackInteger<uint8_t, ColorComponent, RedField, GreenField, BlueField>;
+    using ColorBitField = BitsInteger<uint8_t, ColorComponent, RedField, GreenField, BlueField>;
 }
 
 TEST(ColorBitField, BasicOperations) {
@@ -131,7 +131,7 @@ namespace {
     using OverflowField  = BitField<RegisterFlags, RegisterFlags::Overflow,  3, 1>;
     using InterruptField = BitField<RegisterFlags, RegisterFlags::Interrupt, 8, 4>;
 
-    using StatusRegister = BitPackInteger<uint16_t, RegisterFlags, CarryField, ZeroField, SignField, OverflowField, InterruptField>;
+    using StatusRegister = BitsInteger<uint16_t, RegisterFlags, CarryField, ZeroField, SignField, OverflowField, InterruptField>;
 }
 
 TEST(StatusRegister, FlagOperations) {
@@ -171,7 +171,7 @@ namespace {
     using PageField      = BitField<MemoryAddress, MemoryAddress::Page,      32, 16>;
     using DirectoryField = BitField<MemoryAddress, MemoryAddress::Directory, 48, 16>;
 
-    using VirtualAddress = BitPackInteger<uint64_t, MemoryAddress, OffsetField, SegmentField, PageField, DirectoryField>;
+    using VirtualAddress = BitsInteger<uint64_t, MemoryAddress, OffsetField, SegmentField, PageField, DirectoryField>;
 }
 
 TEST(VirtualAddress, LargeFieldOperations) {
@@ -192,11 +192,11 @@ TEST(VirtualAddress, LargeFieldOperations) {
 }
 
 // Test edge cases
-TEST(BitPackInteger, EdgeCases) {
+TEST(BitsInteger, EdgeCases) {
     // Test with single bit field
     enum class SingleBit { Flag };
     using FlagField = BitField<SingleBit, SingleBit::Flag, 7, 1>;
-    using SingleBitField = BitPackInteger<uint8_t, SingleBit, FlagField>;
+    using SingleBitField = BitsInteger<uint8_t, SingleBit, FlagField>;
     
     SingleBitField flag;
     flag.Set<SingleBit::Flag>(1);
@@ -218,7 +218,7 @@ namespace {
     using RegisterField = BitField<IdOffset, IdOffset::RegisterId, 16, 8>;
     using GraphField    = BitField<IdOffset, IdOffset::GraphId,    24, 8>;
 
-    using GraphNodeId = BitPackInteger<uint32_t, IdOffset, NodeField, RegisterField, GraphField>;
+    using GraphNodeId = BitsInteger<uint32_t, IdOffset, NodeField, RegisterField, GraphField>;
 }
 
 // Test move semantics
@@ -405,7 +405,7 @@ TEST(BitFieldCompileTime, NonOverlappingFields) {
     using GoodField2 = BitField<GoodEnum, GoodEnum::Second, 8, 8>;
     using GoodField3 = BitField<GoodEnum, GoodEnum::Third,  16, 8>;
     using GoodField4 = BitField<GoodEnum, GoodEnum::Fourth, 24, 8>;
-    using GoodBitField = BitPackInteger<uint32_t, GoodEnum, GoodField1, GoodField2, GoodField3, GoodField4>;
+    using GoodBitField = BitsInteger<uint32_t, GoodEnum, GoodField1, GoodField2, GoodField3, GoodField4>;
     
     GoodBitField good;
     good.Set<GoodEnum::First>(0x11);
@@ -424,7 +424,7 @@ TEST(BitFieldEdgeCase, TypeBoundaryFields) {
     
     using FirstBitField = BitField<Flags, Flags::FirstBit, 0, 1>;
     using LastBitField = BitField<Flags, Flags::LastBit, 7, 1>;
-    using FlagBitField = BitPackInteger<uint8_t, Flags, FirstBitField, LastBitField>;
+    using FlagBitField = BitsInteger<uint8_t, Flags, FirstBitField, LastBitField>;
     
     FlagBitField flags;
     flags.Set<Flags::FirstBit>(1);
@@ -444,7 +444,7 @@ TEST(CompileError, OverlappingFields1) {
     
     using BadField1 = BitField<BadEnum1, BadEnum1::Field1, 0, 8>;
     using BadField2 = BitField<BadEnum1, BadEnum1::Field2, 4, 8>;  // Overlaps with Field1
-    using BadBitField1 = BitPackInteger<uint16_t, BadEnum1, BadField1, BadField2>;
+    using BadBitField1 = BitsInteger<uint16_t, BadEnum1, BadField1, BadField2>;
     
     // This line will trigger the compile error
     BadBitField1 bad_instance; 
@@ -460,7 +460,7 @@ TEST(CompileError, OverlappingFields2) {
     using BadField2_1 = BitField<BadEnum2, BadEnum2::Field1, 0, 4>;
     using BadField2_2 = BitField<BadEnum2, BadEnum2::Field2, 3, 4>;  // Starts at bit 3, overlaps with Field1
     using BadField2_3 = BitField<BadEnum2, BadEnum2::Field3, 7, 4>;
-    using BadBitField2 = BitPackInteger<uint8_t, BadEnum2, BadField2_1, BadField2_2, BadField2_3>;
+    using BadBitField2 = BitsInteger<uint8_t, BadEnum2, BadField2_1, BadField2_2, BadField2_3>;
     
     BadBitField2 bad_instance;
 }
@@ -473,7 +473,7 @@ TEST(CompileError, FieldExceedsWidth1) {
     };
     
     using BadField3 = BitField<BadEnum3, BadEnum3::TooLarge, 0, 16>;  // 16 bits doesn't fit in uint8_t
-    using BadBitField3 = BitPackInteger<uint8_t, BadEnum3, BadField3>;
+    using BadBitField3 = BitsInteger<uint8_t, BadEnum3, BadField3>;
     
     BadBitField3 bad_instance;
 }
@@ -486,7 +486,7 @@ TEST(CompileError, FieldExceedsWidth2) {
     };
     
     using BadField4 = BitField<BadEnum4, BadEnum4::OutOfBounds, 30, 4>;  // Starts at bit 30, ends at 34
-    using BadBitField4 = BitPackInteger<uint32_t, BadEnum4, BadField4>;
+    using BadBitField4 = BitsInteger<uint32_t, BadEnum4, BadField4>;
     
     BadBitField4 bad_instance;
 }
@@ -502,7 +502,7 @@ TEST(CompileError, ComplexOverlapping) {
     using BadField5_B = BitField<BadEnum5, BadEnum5::B, 8, 10>;   // Overlaps with A
     using BadField5_C = BitField<BadEnum5, BadEnum5::C, 16, 10>;  // OK
     using BadField5_D = BitField<BadEnum5, BadEnum5::D, 20, 10>;  // Overlaps with C
-    using BadBitField5 = BitPackInteger<uint32_t, BadEnum5, BadField5_A, BadField5_B, BadField5_C, BadField5_D>;
+    using BadBitField5 = BitsInteger<uint32_t, BadEnum5, BadField5_A, BadField5_B, BadField5_C, BadField5_D>;
     
     BadBitField5 bad_instance;
 }
