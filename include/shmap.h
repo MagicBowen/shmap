@@ -142,7 +142,7 @@ struct ShmHashTable {
                         old_ptr = &old;
                     }
 
-                    bool ok = ApplyVisitor(std::forward<Visitor>(visitor), (idx + probe) % CAPACITY, b.value, false,old_ptr);
+                    bool ok = ApplyVisitor(std::forward<Visitor>(visitor), old_ptr, (idx + probe) % CAPACITY, b.value, false);
 
                     SHMAP_LOG("ShmHashTable[%zd] from ACCESSING to READY!", idx);
                     b.state.store(Bucket::READY, std::memory_order_release);
@@ -168,7 +168,7 @@ struct ShmHashTable {
 
                     VALUE old_dummy{};
                     VALUE* old_ptr = ROLLBACK_ENABLE ? &old_dummy : nullptr;
-                    bool ok = ApplyVisitor(std::forward<Visitor>(visitor), (idx + probe) % CAPACITY, b.value, true, old_ptr);
+                    bool ok = ApplyVisitor(std::forward<Visitor>(visitor), old_ptr, (idx + probe) % CAPACITY, b.value, true);
 
                     if (!ok && ROLLBACK_ENABLE) {
                         SHMAP_LOG("ShmHashTable[%zd] from INSERTING to EMPTY!", idx);
@@ -215,12 +215,7 @@ struct ShmHashTable {
                         continue;
                     }
 
-                    bool ok = true;
-                    if constexpr (std::is_same_v<std::invoke_result_t<Visitor, std::size_t, KEY const&, VALUE&>, void>) {
-                        std::forward<Visitor>(visit)(idx, b.key, b.value);
-                    } else {
-                        ok = std::forward<Visitor>(visit)(idx, b.key, b.value);
-                    }
+                    bool ok = ApplyVisitor(std::forward<Visitor>(visit), idx, b.key, b.value);
                     b.state.store(Bucket::READY, std::memory_order_release);
                     if (!ok) return false;
 
@@ -233,20 +228,28 @@ struct ShmHashTable {
     }    
 
 private:
-    template<typename Visitor>
-    bool ApplyVisitor(Visitor&& visit, std::size_t idx, VALUE& value, bool isNew,
-        VALUE* oldValue /* non-null only if rollback enabled */) noexcept {
+    template<typename Visitor, typename ...Args>
+    bool ApplyVisitor(Visitor&& visit, Args&&... args) noexcept {
         bool result = true;
         try {
-            if constexpr (std::is_same_v<std::invoke_result_t<Visitor, std::size_t, VALUE&, bool>, void>) {
+            if constexpr (std::is_same_v<std::invoke_result_t<Visitor, Args...>, bool>) {
+                // bool visitor -> return result
+                result = std::forward<Visitor>(visit)(std::forward<Args>(args)...);
+            } else if constexpr (std::is_same_v<std::invoke_result_t<Visitor, Args...>, void>) {
                 // void visitor -> always success
-                std::forward<Visitor>(visit)(idx, value, isNew);
-            } else {
-                result = std::forward<Visitor>(visit)(idx, value, isNew);
+                std::forward<Visitor>(visit)(std::forward<Args>(args)...);
             }
         } catch (...) {
             result = false;
         }
+        return result;
+    }
+
+    template<typename Visitor>
+    bool ApplyVisitor(Visitor&& visit, VALUE* oldValue /* non-null only if rollback enabled */,
+        std::size_t idx, VALUE& value, bool isNew) noexcept {
+
+        bool result = ApplyVisitor(std::forward<Visitor>(visit), idx, value, isNew);
         if (!result && oldValue) {
             // roll back
             value = *oldValue;
