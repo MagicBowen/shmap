@@ -48,8 +48,8 @@ struct Backoff {
         if (spin_ < YIELD_LIMIT) {
             std::this_thread::yield();
         } else {
-            int  exp = std::min(spin_ - YIELD_LIMIT, MAX_BACKOFF_EXP);
-            auto nanos = std::chrono::nanoseconds(1LL << exp);
+            int  expected = std::min(spin_ - YIELD_LIMIT, MAX_BACKOFF_EXP);
+            auto nanos = std::chrono::nanoseconds(1LL << expected);
             std::this_thread::sleep_for(nanos);
         }
         ++spin_;
@@ -125,9 +125,14 @@ struct ShmHashTable {
                     auto expectState = Bucket::READY;
                     if (!b.state.compare_exchange_strong(expectState, Bucket::ACCESSING,
                             std::memory_order_acq_rel, std::memory_order_acquire)) {
-                        if (!backoff.next()) return false;
+                        if (!backoff.next()) {
+                            SHMAP_LOG("ShmHashTable[%%zd] backoff timeout!", idx);
+                            return false;
+                        }
                         continue;
                     }
+
+                    SHMAP_LOG("ShmHashTable[%zd] from READY to ACCESSING!", idx);
 
                     // Maybe save old value
                     VALUE old{};
@@ -139,6 +144,7 @@ struct ShmHashTable {
 
                     bool ok = ApplyVisitor(std::forward<Visitor>(visitor), (idx + probe) % CAPACITY, b.value, false,old_ptr);
 
+                    SHMAP_LOG("ShmHashTable[%zd] from ACCESSING to READY!", idx);
                     b.state.store(Bucket::READY, std::memory_order_release);
                     return ok;
                 }
@@ -148,9 +154,14 @@ struct ShmHashTable {
                     uint32_t expectState = Bucket::EMPTY;
                     if (!b.state.compare_exchange_strong(expectState, Bucket::INSERTING,
                             std::memory_order_acq_rel, std::memory_order_acquire)) {
-                        if (!backoff.next()) return false;
+                        if (!backoff.next()) {
+                            SHMAP_LOG("ShmHashTable[%zd] backoff timeout!", idx);
+                            return false;
+                        }
                         continue;
                     }
+
+                    SHMAP_LOG("ShmHashTable[%zd] from EMPTY to INSERTING!", idx);
 
                     b.key   = key;
                     b.value = VALUE{};
@@ -160,9 +171,11 @@ struct ShmHashTable {
                     bool ok = ApplyVisitor(std::forward<Visitor>(visitor), (idx + probe) % CAPACITY, b.value, true, old_ptr);
 
                     if (!ok && ROLLBACK_ENABLE) {
+                        SHMAP_LOG("ShmHashTable[%zd] from INSERTING to EMPTY!", idx);
                         b.state.store(Bucket::EMPTY, std::memory_order_release);
                         return false;
                     }
+                    SHMAP_LOG("ShmHashTable[%zd] from INSERTING to READY!", idx);
                     b.state.store(Bucket::READY, std::memory_order_release);
                     return ok;
                 }
@@ -173,36 +186,51 @@ struct ShmHashTable {
                 }
 
                 // Otherwise waiting
-                if (!backoff.next()) return false;
+                if (!backoff.next()) {
+                    SHMAP_LOG("ShmHashTable[%zd] backoff timeout!", idx);
+                    return false;
+                }
             }
         }
         return false; // table full or timeout
     }
 
     template<typename Visitor>
-    void Travel(Visitor&& visit) noexcept {
-        for(std::size_t idx = 0; idx < CAPACITY; ++idx) {
+    bool Travel(Visitor&& visit, 
+        std::chrono::nanoseconds timeout = std::chrono::seconds(5)) noexcept {
+
+        Backoff backoff(timeout);
+        for (std::size_t idx = 0; idx < CAPACITY; ++idx) {
             Bucket& b = buckets_[idx];
-            while(true) {
-                auto curState = b.state.load(std::memory_order_acquire);
-                if(curState == Bucket::READY) {
-                    auto expected = Bucket::READY;
-                    if(!b.state.compare_exchange_strong(expected, Bucket::ACCESSING,
+            while (true) {
+                uint32_t curState = b.state.load(std::memory_order_acquire);
+
+                if (curState == Bucket::EMPTY) break;
+
+                if (curState == Bucket::READY) {
+                    uint32_t expected = Bucket::READY;
+                    if (!b.state.compare_exchange_strong(expected, Bucket::ACCESSING,
                             std::memory_order_acq_rel, std::memory_order_acquire)) {
+                        if (!backoff.next()) return false;
                         continue;
                     }
 
-                    std::forward<Visitor>(visit)(idx, b.key, b.value);
+                    bool ok = true;
+                    if constexpr (std::is_same_v<std::invoke_result_t<Visitor, std::size_t, KEY const&, VALUE&>, void>) {
+                        std::forward<Visitor>(visit)(idx, b.key, b.value);
+                    } else {
+                        ok = std::forward<Visitor>(visit)(idx, b.key, b.value);
+                    }
                     b.state.store(Bucket::READY, std::memory_order_release);
+                    if (!ok) return false;
+
                     break;
-                } else if(curState == Bucket::EMPTY) {
-                    break;
-                } else {
-                    std::this_thread::yield();
                 }
+                if (!backoff.next()) return false;
             }
         }
-    }
+        return true;
+    }    
 
 private:
     template<typename Visitor>
