@@ -94,6 +94,10 @@ namespace detail {
     };
 } // namespace detail
 
+static inline constexpr std::size_t BitWidth(std::size_t n) noexcept {
+    return (n <= 1) ? 0 : 64 - __builtin_clzll(n - 1);
+}
+
 // Field descriptor to define a bit field range
 template<auto EnumValue, std::size_t StartBit, std::size_t BitCount>
 struct BitField {
