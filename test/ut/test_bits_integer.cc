@@ -432,7 +432,6 @@ TEST(BitFieldEdgeCase, TypeBoundaryFields) {
     
     FlagBitField flags;
     flags.Set<Flags::LastBit>(1).Set<Flags::FirstBit>(1);
-    // flags |= FirstBitField(1) | LastBitField(1);
 
     EXPECT_EQ(flags.GetRawValue(), 0x81u);  // 10000001
 }
