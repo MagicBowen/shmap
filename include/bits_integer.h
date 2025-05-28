@@ -76,28 +76,28 @@ namespace detail {
     };
 
     // Helper to find a field by enum value
-    template<typename EnumType, EnumType Value, typename... Fields>
+    template<auto Value, typename... Fields>
     struct FindField;
 
-    template<typename EnumType, EnumType Value>
-    struct FindField<EnumType, Value> {
+    template<auto Value>
+    struct FindField<Value> {
         using type = void;
     };
 
-    template<typename EnumType, EnumType Value, typename Field, typename... Rest>
-    struct FindField<EnumType, Value, Field, Rest...> {
+    template<auto Value, typename Field, typename... Rest>
+    struct FindField<Value, Field, Rest...> {
         using type = std::conditional_t<
             Field::enum_value == Value,
             Field,
-            typename FindField<EnumType, Value, Rest...>::type
+            typename FindField<Value, Rest...>::type
         >;
     };
 } // namespace detail
 
 // Field descriptor to define a bit field range
-template<typename EnumType, EnumType EnumValue, std::size_t StartBit, std::size_t BitCount>
+template<auto EnumValue, std::size_t StartBit, std::size_t BitCount>
 struct BitField {
-    static constexpr EnumType enum_value = EnumValue;
+    static constexpr auto enum_value = EnumValue;
     static constexpr std::size_t start_bit = StartBit;
     static constexpr std::size_t bit_count = BitCount;
     static constexpr std::size_t end_bit = StartBit + BitCount;
@@ -129,10 +129,9 @@ private:
 };
 
 // Main BitsInteger class
-template<typename UnderlyingType, typename EnumType, typename... Fields>
+template<typename UnderlyingType, typename... Fields>
 class BitsInteger {
     static_assert(std::is_unsigned_v<UnderlyingType>, "Underlying type must be unsigned");
-    static_assert(std::is_enum_v<EnumType>, "EnumType must be an enum");
     
     // Check for overlapping fields
     static constexpr bool has_overlapping_fields = detail::CheckFieldOverlaps<Fields...>::value;
@@ -141,11 +140,8 @@ class BitsInteger {
     // Check that no field exceeds type width
     static constexpr bool any_field_exceeds_width = detail::AnyFieldExceedsTypeWidth<UnderlyingType, Fields...>::value;
     static_assert(!any_field_exceeds_width, "All fields must fit within the underlying type");
-    
+
 public:
-    using underlying_type = UnderlyingType;
-    using enum_type = EnumType;
-    
     constexpr BitsInteger() noexcept 
     : value_(0) {}
     
@@ -167,20 +163,21 @@ public:
         return value_;
     }
     
-    template<EnumType E>
-    void Set(UnderlyingType value) {
-        using Field = typename detail::FindField<EnumType, E, Fields...>::type;
-        static_assert(!std::is_void_v<Field>, "Invalid enum value for this BitsInteger");
-        
-        value_ = Field::template InsertValue<UnderlyingType>(value_, value);
-    }
-    
-    template<EnumType E>
+    template<auto E>
     constexpr UnderlyingType Get() const {
-        using Field = typename detail::FindField<EnumType, E, Fields...>::type;
+        using Field = typename detail::FindField<E, Fields...>::type;
         static_assert(!std::is_void_v<Field>, "Invalid enum value for this BitsInteger");
         
         return Field::template ExtractValue<UnderlyingType>(value_);
+    }
+
+    template<auto E>
+    BitsInteger& Set(UnderlyingType value) {
+        using Field = typename detail::FindField<E, Fields...>::type;
+        static_assert(!std::is_void_v<Field>, "Invalid enum value for this BitsInteger");
+        
+        value_ = Field::template InsertValue<UnderlyingType>(value_, value);
+        return *this;
     }
 
     constexpr UnderlyingType GetRawValue() const noexcept {
