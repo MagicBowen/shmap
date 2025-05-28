@@ -113,6 +113,7 @@ struct BitField {
         T shifted_value = (field_value << start_bit) & mask;
         return (full_value & ~mask) | shifted_value;
     }
+
 private:
     template<typename T>
     static constexpr T CreateMask() {
@@ -125,7 +126,7 @@ private:
         } else {
             return ((static_cast<T>(1) << bit_count) - 1) << start_bit;
         }
-    }    
+    }
 };
 
 // Main BitsInteger class
