@@ -126,7 +126,7 @@ struct ShmHashTable {
                     if (!b.state.compare_exchange_strong(expectState, Bucket::ACCESSING,
                             std::memory_order_acq_rel, std::memory_order_acquire)) {
                         if (!backoff.next()) {
-                            SHMAP_LOG("ShmHashTable[%%zd] backoff timeout!", idx);
+                            SHMAP_LOG("ShmHashTable[%zd] backoff timeout!", idx);
                             return false;
                         }
                         continue;
@@ -163,18 +163,21 @@ struct ShmHashTable {
 
                     SHMAP_LOG("ShmHashTable[%zd] from EMPTY to INSERTING!", idx);
 
-                    b.key   = key;
-                    b.value = VALUE{};
-
+                    b.value = VALUE{}; // default construct value
+                    
                     VALUE old_dummy{};
                     VALUE* old_ptr = ROLLBACK_ENABLE ? &old_dummy : nullptr;
                     bool ok = ApplyVisitor(std::forward<Visitor>(visitor), old_ptr, (idx + probe) % CAPACITY, b.value, true);
-
-                    if (!ok && ROLLBACK_ENABLE) {
-                        SHMAP_LOG("ShmHashTable[%zd] from INSERTING to EMPTY!", idx);
-                        b.state.store(Bucket::EMPTY, std::memory_order_release);
-                        return false;
+                    
+                    if (ROLLBACK_ENABLE) {
+                        if (!ok) {
+                            SHMAP_LOG("ShmHashTable[%zd] from INSERTING to EMPTY!", idx);
+                            b.state.store(Bucket::EMPTY, std::memory_order_release);
+                            return false;
+                        }
                     }
+                    b.key = key;
+
                     SHMAP_LOG("ShmHashTable[%zd] from INSERTING to READY!", idx);
                     b.state.store(Bucket::READY, std::memory_order_release);
                     return ok;
@@ -250,9 +253,11 @@ private:
         std::size_t idx, VALUE& value, bool isNew) noexcept {
 
         bool result = ApplyVisitor(std::forward<Visitor>(visit), idx, value, isNew);
-        if (!result && oldValue) {
-            // roll back
-            value = *oldValue;
+        if (ROLLBACK_ENABLE) {
+            if (!result && oldValue) {
+                // roll back
+                value = *oldValue;
+            }
         }
         return result;
     }
@@ -353,8 +358,6 @@ private:
     ShmStorage() {
         constexpr const char* path = SHM_PATH::value;
 
-        SHMAP_LOG("ShmStorage construct %s!", SHM_PATH::value);
-
         fd_ = ::shm_open(path, O_RDWR | O_CREAT | O_EXCL, 0666);
 
         if (fd_ >= 0) {
@@ -365,6 +368,7 @@ private:
                 ::shm_unlink(path);
                 throw std::runtime_error("ftruncate failed: " + std::to_string(e));
             }
+            SHMAP_LOG("ShmStorage construct %s!", SHM_PATH::value);
         }
         else if (errno == EEXIST) {
             fd_ = ::shm_open(path, O_RDWR, 0666);
@@ -372,6 +376,7 @@ private:
                 int e = errno;
                 throw std::runtime_error("shm_open O_RDWR failed: " + std::to_string(e));
             }
+            SHMAP_LOG("ShmStorage open %s!", SHM_PATH::value);
         }
         else {
             int e = errno;
