@@ -213,13 +213,14 @@ struct ShmHashTable {
         }
     }
 
-    // const version of VisitBucket
+    // Const version of VisitBucket
     template<typename Visitor /* Status (const Bucket&) */>
     Status VisitBucket(std::size_t bucketId, Visitor&& visitor) const noexcept {
         return const_cast<ShmHashTable*>(this)->VisitBucket(bucketId, std::forward<Visitor>(visitor));
     }
 
-    // Travel all buckets, apply visitor to each bucket, using in audit scenarios
+    // Travel all buckets, apply visitor to each bucket
+    // Only used in audit scenarios exclusive to oneself and no concurrent competition
     template<typename Visitor /* Status (idx, Bucket&) */>
     Status TravelBucket(Visitor&& visitor) noexcept {
         for (std::size_t idx = 0; idx < CAPACITY; ++idx) {
@@ -229,7 +230,7 @@ struct ShmHashTable {
         return Status::SUCCESS;
     }
 
-    // const version of TravelBucket
+    // Const version of TravelBucket
     template<typename Visitor /* Status (idx, const Bucket&) */>
     Status TravelBucket(Visitor&& visitor) const noexcept {
         return const_cast<ShmHashTable*>(this)->TravelBucket(std::forward<Visitor>(visitor));
