@@ -18,7 +18,9 @@ namespace shmap {
 
 template <typename T, std::size_t N>
 struct ShmRingBuffer {
-    static_assert(std::is_trivial_v<T>,  "T must be trivial type");
+    static_assert(std::is_trivially_copyable<T>::value,  "T must be trivially copyable");
+    static_assert(std::is_standard_layout<T>::value, "T should be standard layout!");
+
     static_assert(N > 0, "Size must be positive");
 
     std::size_t capacity() const noexcept {

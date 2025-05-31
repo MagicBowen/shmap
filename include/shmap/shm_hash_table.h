@@ -50,8 +50,11 @@ template<typename KEY, typename VALUE, std::size_t CAPACITY,
 >
 struct ShmHashTable {
     static_assert(CAPACITY > 0, "CAPACITY must be > 0");
-    static_assert(std::is_trivial_v<KEY>,   "KEY must be trivial type");
-    static_assert(std::is_trivial_v<VALUE>, "VALUE must be trivial type");
+    static_assert(std::is_trivially_copyable<KEY>::value, "KEY must be trivially copyable");
+    static_assert(std::is_standard_layout<KEY>::value, "KEY should be standard layout!");
+
+    static_assert(std::is_trivially_copyable<VALUE>::value, "VALUE must be trivially copyable");
+    static_assert(std::is_standard_layout<VALUE>::value, "VALUE should be standard layout!");
 
     using Bucket = ShmBucket<KEY,VALUE>;
     static_assert(sizeof(Bucket) % CACHE_LINE_SIZE == 0,  "Bucket must be cache-line multiple");

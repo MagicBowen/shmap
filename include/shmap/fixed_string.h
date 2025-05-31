@@ -94,7 +94,7 @@ private:
     friend std::ostream& operator<<(std::ostream& os, const FixedString& fs);
 };
 
-static_assert(std::is_trivial<FixedString>::value, "FixedString should be trivial!");
+static_assert(std::is_trivially_copyable<FixedString>::value, "FixedString should be trivially copyable!");
 static_assert(std::is_standard_layout<FixedString>::value, "FixedString should be standard layout!");
 
 inline bool operator==(const FixedString& a, const FixedString& b) {

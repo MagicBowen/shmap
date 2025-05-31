@@ -28,6 +28,9 @@ namespace shmap {
 /* -------------------------------------------------------------------------- */
 template<typename TABLE>
 struct ShmBlock {
+    static_assert(std::is_trivially_copyable<TABLE>::value, "TABLE must be trivially copyable");
+    static_assert(std::is_standard_layout<TABLE>::value, "TABLE must have standard layout");
+
     static constexpr std::size_t GetMemUsage() noexcept { 
         return sizeof(ShmBlock); 
     }
