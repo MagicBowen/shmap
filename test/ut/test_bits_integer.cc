@@ -17,11 +17,23 @@ namespace {
     using GreenField = BitField<ColorComponent::Green, 3, 3>;
     using BlueField  = BitField<ColorComponent::Blue,  6, 2>;
 
-    using ColorBitField = BitsInteger<uint8_t, RedField, GreenField, BlueField>;
+    using ColorBitInteger = BitsInteger<uint8_t, RedField, GreenField, BlueField>;
 }
 
-TEST(ColorBitField, BasicOperations) {
-    ColorBitField color;
+TEST(ColorBitInteger, InvalidValue) {
+    // Test invalid value
+    auto color = ColorBitInteger::INVALID();
+    ASSERT_FALSE(color.IsValid());
+    ASSERT_FALSE(color);
+
+    ASSERT_EQ(ColorBitInteger::INVALID().GetRawValue(), 0xFF); // Invalid value should be 0xFF
+    ASSERT_FALSE(ColorBitInteger::Verify(color.GetRawValue()));
+    ASSERT_TRUE(ColorBitInteger::Verify(0xEF)); // Verify with a valid value
+    ASSERT_FALSE(ColorBitInteger::Verify(0xFF)); // Verify with an invalid value
+}
+
+TEST(ColorBitInteger, BasicOperations) {
+    ColorBitInteger color;
     
     // Test default construction
     ASSERT_EQ(color.GetRawValue(), 0);
@@ -40,34 +52,38 @@ TEST(ColorBitField, BasicOperations) {
     // Red: 111 (7), Green: 101 (5), Blue: 11 (3)
     // Binary: 11101111 = 0xEF
     ASSERT_EQ(color.GetRawValue(), 0xEF);
+    ASSERT_TRUE(color);
+    ASSERT_TRUE(color.IsValid());
+    ASSERT_TRUE(ColorBitInteger::Verify(color.GetRawValue()));
+    ASSERT_NE(color, ColorBitInteger::INVALID());
 }
 
-TEST(ColorBitField, ConstructorAndAssignment) {
+TEST(ColorBitInteger, ConstructorAndAssignment) {
     // Test construction from underlying type
-    ColorBitField color1(0x2A); // 00101010
+    ColorBitInteger color1(0x2A); // 00101010
     ASSERT_EQ(color1.Get<ColorComponent::Red>(), 2);   // 010
     ASSERT_EQ(color1.Get<ColorComponent::Green>(), 5); // 101
     ASSERT_EQ(color1.Get<ColorComponent::Blue>(), 0);  // 00
     
     // Test copy constructor
-    ColorBitField color2(color1);
+    ColorBitInteger color2(color1);
     ASSERT_EQ(color2, color1);
     
     // Test assignment from underlying type
-    ColorBitField color3;
+    ColorBitInteger color3;
     color3 = 0x15; // 00010101
     ASSERT_EQ(color3.Get<ColorComponent::Red>(), 5);   // 101
     ASSERT_EQ(color3.Get<ColorComponent::Green>(), 2); // 010
     ASSERT_EQ(color3.Get<ColorComponent::Blue>(), 0);  // 00
     
     // Test assignment operator
-    ColorBitField color4;
+    ColorBitInteger color4;
     color4 = color3;
     ASSERT_EQ(color4, color3);
 }
 
-TEST(ColorBitField, ImplicitConversion) {
-    ColorBitField color;
+TEST(ColorBitInteger, ImplicitConversion) {
+    ColorBitInteger color;
     color.Set<ColorComponent::Red>(3);
     color.Set<ColorComponent::Green>(4);
     color.Set<ColorComponent::Blue>(2);
@@ -77,9 +93,9 @@ TEST(ColorBitField, ImplicitConversion) {
     ASSERT_EQ(value, (2 << 6) | (4 << 3) | 3);
 }
 
-TEST(ColorBitField, ComparisonOperators) {
-    ColorBitField color1;
-    ColorBitField color2;
+TEST(ColorBitInteger, ComparisonOperators) {
+    ColorBitInteger color1;
+    ColorBitInteger color2;
     
     // Test equality when both are default constructed
     ASSERT_EQ(color1, color2);
@@ -99,8 +115,8 @@ TEST(ColorBitField, ComparisonOperators) {
     EXPECT_NE(6, color1);
 }
 
-TEST(ColorBitField, FieldOverflow) {
-    ColorBitField color;
+TEST(ColorBitInteger, FieldOverflow) {
+    ColorBitInteger color;
     
     // Red field is 3 bits, max value is 7
     color.Set<ColorComponent::Red>(15); // Will be masked to 7
@@ -111,8 +127,8 @@ TEST(ColorBitField, FieldOverflow) {
     ASSERT_EQ(color.Get<ColorComponent::Blue>(), 3);
 }
 
-TEST(ColorBitField, Clear) {
-    ColorBitField color(0xFF);
+TEST(ColorBitInteger, Clear) {
+    ColorBitInteger color(0xFF);
     EXPECT_NE(color.GetRawValue(), 0);
     
     color.Clear();

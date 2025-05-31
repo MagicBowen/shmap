@@ -94,7 +94,7 @@ namespace detail {
     };
 } // namespace detail
 
-static inline constexpr std::size_t BitWidth(std::size_t n) noexcept {
+static inline constexpr std::size_t BitWidthOf(std::size_t n) noexcept {
     return (n <= 1) ? 0 : 64 - __builtin_clzll(n - 1);
 }
 
@@ -135,7 +135,7 @@ private:
 
 // Main BitsInteger class
 template<typename UnderlyingType, typename... Fields>
-class BitsInteger {
+struct BitsInteger {
     static_assert(std::is_unsigned_v<UnderlyingType>, "Underlying type must be unsigned");
     
     // Check for overlapping fields
@@ -146,7 +146,15 @@ class BitsInteger {
     static constexpr bool any_field_exceeds_width = detail::AnyFieldExceedsTypeWidth<UnderlyingType, Fields...>::value;
     static_assert(!any_field_exceeds_width, "All fields must fit within the underlying type");
 
-public:
+    static constexpr BitsInteger INVALID() noexcept {
+        return BitsInteger(INVALID_VALUE);
+    }
+
+    template<typename T>
+    static constexpr bool Verify(const T& value) noexcept {
+        return static_cast<UnderlyingType>(value) != INVALID_VALUE;
+    }
+
     constexpr BitsInteger() noexcept 
     : value_(0) {}
     
@@ -166,6 +174,14 @@ public:
 
     constexpr operator UnderlyingType() const noexcept {
         return value_;
+    }
+
+    constexpr operator bool() const noexcept {
+        return IsValid();
+    }
+
+    constexpr bool IsValid() const noexcept {
+        return value_ != INVALID_VALUE;
     }
     
     template<auto E>
@@ -224,7 +240,10 @@ public:
     friend constexpr bool operator!=(T lhs, const BitsInteger& rhs) noexcept {
         return static_cast<UnderlyingType>(lhs) != rhs.value_;
     }
-    
+
+private:
+    static constexpr UnderlyingType INVALID_VALUE = std::numeric_limits<UnderlyingType>::max();
+
 private:
     UnderlyingType value_;
 };
