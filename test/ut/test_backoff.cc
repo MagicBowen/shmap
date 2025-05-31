@@ -4,7 +4,9 @@
 #include <vector>
 #include <chrono>
 #include <numeric>
-#include "shmap.h"
+
+#include "backoff.h"
+#include "shm_hash_table.h"
 
 using namespace shmap;
 using namespace std::chrono_literals;

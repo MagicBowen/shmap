@@ -10,6 +10,7 @@
 #include <new>
 
 #include "shmap.h"
+#include "shm_hash_table.h"
 #include "fixed_string.h"
 
 using namespace shmap;

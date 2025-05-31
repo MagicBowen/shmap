@@ -4,8 +4,8 @@
 #include <atomic>
 #include <string>
 
-#include "shmap.h"
 #include "fixed_string.h"
+#include "shm_hash_table.h"
 
 using namespace shmap;
 
