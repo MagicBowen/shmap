@@ -34,10 +34,10 @@ namespace {
 TEST(RollbackTest, InsertFailLeavesEmpty) {
     RbTable table;
 
-    // If the visitor returns false
+    // If the visitor returns error
     // the insertion should be rolled back and the subsequent access won't find it
-    bool ok = table.Visit(42, AccessMode::CreateIfMiss,
-        [](auto, int&, bool){ return false; }
+    auto ok = table.Visit(42, AccessMode::CreateIfMiss,
+        [](auto, int&, bool){ return Status::ERROR; }
     );
     ASSERT_FALSE(ok);
 
@@ -49,12 +49,12 @@ TEST(RollbackTest, UpdateFailRestoresOldValue) {
     RbTable table;
     // First, successfully insert value = 1
     ASSERT_TRUE(table.Visit(7, AccessMode::CreateIfMiss,
-        [](auto, int& v, bool){ v = 1; return true; }
+        [](auto, int& v, bool){ v = 1; return Status::SUCCESS; }
     ));
     // Visit again, try to set the value to 2, 
-    // but return false -> it should be rolled back
+    // but return error -> it should be rolled back
     ASSERT_FALSE(table.Visit(7, AccessMode::AccessExist,
-        [](auto, int& v, bool){ v = 2; return false; }
+        [](auto, int& v, bool){ v = 2; return Status::ERROR; }
     ));
     // The final value should still be 1
     auto [found,val] = peek(table, 7);
@@ -109,7 +109,7 @@ TEST(TimeoutTest, VisitorHoldLockCausesTimeout) {
 
     // Thread B: Read-only mode, with a 100ms timeout => should return false in advance
     auto start = std::chrono::steady_clock::now();
-    bool ok = table.Visit(key, AccessMode::AccessExist,
+    auto ok = table.Visit(key, AccessMode::AccessExist,
         [&](auto, int& v, bool){ v = 128; },
         100ms  // timeout
     );

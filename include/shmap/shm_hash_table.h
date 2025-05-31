@@ -7,6 +7,7 @@
 
 #include "shmap/shmap.h"
 #include "shmap/backoff.h"
+#include "shmap/status.h"
 
 #include <type_traits>
 #include <cstddef>
@@ -16,6 +17,9 @@
 
 namespace shmap {
 
+/* -------------------------------------------------------------------------- */
+/*                     ShmBucket – bucket for closed hashing table            */
+/* -------------------------------------------------------------------------- */    
 template<typename KEY, typename VALUE>
 struct alignas(CACHE_LINE_SIZE) ShmBucket {
     static constexpr uint32_t EMPTY = 0;
@@ -28,6 +32,9 @@ struct alignas(CACHE_LINE_SIZE) ShmBucket {
     VALUE value;
 };
 
+/* -------------------------------------------------------------------------- */
+/*                     AccessMode – how to access the table                   */
+/* -------------------------------------------------------------------------- */
 enum class AccessMode : uint8_t {
     AccessExist,
     CreateIfMiss,
@@ -43,16 +50,16 @@ template<typename KEY, typename VALUE, std::size_t CAPACITY,
 >
 struct ShmHashTable {
     static_assert(CAPACITY > 0, "CAPACITY must be > 0");
-    static_assert(std::is_trivially_copyable<KEY>::value,   "KEY must be trivially copyable");
-    static_assert(std::is_trivially_copyable<VALUE>::value, "VALUE must be trivially copyable");
-    
+    static_assert(std::is_trivial_v<KEY>,   "KEY must be trivial type");
+    static_assert(std::is_trivial_v<VALUE>, "VALUE must be trivial type");
+
     using Bucket = ShmBucket<KEY,VALUE>;
     static_assert(sizeof(Bucket) % CACHE_LINE_SIZE == 0,  "Bucket must be cache-line multiple");
 
     ShmHashTable() = default; // Only used for placement-new
 
-    template<typename Visitor>
-    bool Visit(const KEY& key, AccessMode mode, Visitor&& visitor,
+    template<typename Visitor /* Status (idx, Value&, bool isNew) */>
+    Status Visit(const KEY& key, AccessMode mode, Visitor&& visitor,
         std::chrono::nanoseconds timeout = std::chrono::seconds(5)) noexcept {
             
         Backoff backoff(timeout);
@@ -73,7 +80,7 @@ struct ShmHashTable {
                             std::memory_order_acq_rel, std::memory_order_acquire)) {
                         if (!backoff.next()) {
                             SHMAP_LOG("ShmHashTable[%zd] backoff timeout!", idx);
-                            return false;
+                            return Status::TIMEOUT;
                         }
                         continue;
                     }
@@ -88,11 +95,11 @@ struct ShmHashTable {
                         old_ptr = &old;
                     }
 
-                    bool ok = ApplyVisitor(std::forward<Visitor>(visitor), old_ptr, (idx + probe) % CAPACITY, b.value, false);
+                    Status status = ApplyVisitor(std::forward<Visitor>(visitor), old_ptr, (idx + probe) % CAPACITY, b.value, false);
 
                     SHMAP_LOG("ShmHashTable[%zd] from ACCESSING to READY!", idx);
                     b.state.store(Bucket::READY, std::memory_order_release);
-                    return ok;
+                    return status;
                 }
 
                 // Empty && Create
@@ -102,7 +109,7 @@ struct ShmHashTable {
                             std::memory_order_acq_rel, std::memory_order_acquire)) {
                         if (!backoff.next()) {
                             SHMAP_LOG("ShmHashTable[%zd] backoff timeout!", idx);
-                            return false;
+                            return Status::TIMEOUT;
                         }
                         continue;
                     }
@@ -113,39 +120,38 @@ struct ShmHashTable {
                     
                     VALUE old_dummy{};
                     VALUE* old_ptr = ROLLBACK_ENABLE ? &old_dummy : nullptr;
-                    bool ok = ApplyVisitor(std::forward<Visitor>(visitor), old_ptr, (idx + probe) % CAPACITY, b.value, true);
+                    Status status = ApplyVisitor(std::forward<Visitor>(visitor), old_ptr, (idx + probe) % CAPACITY, b.value, true);
                     
-                    if (ROLLBACK_ENABLE) {
-                        if (!ok) {
-                            SHMAP_LOG("ShmHashTable[%zd] from INSERTING to EMPTY!", idx);
-                            b.state.store(Bucket::EMPTY, std::memory_order_release);
-                            return false;
-                        }
+                    if (!status) {
+                        SHMAP_LOG("ShmHashTable[%zd] from INSERTING to EMPTY!", idx);
+                        b.state.store(Bucket::EMPTY, std::memory_order_release);
+                        return status;
                     }
+
                     b.key = key;
 
                     SHMAP_LOG("ShmHashTable[%zd] from INSERTING to READY!", idx);
                     b.state.store(Bucket::READY, std::memory_order_release);
-                    return ok;
+                    return Status::SUCCESS;
                 }
 
                 // Empty && Read-only miss
                 if (state == Bucket::EMPTY && mode == AccessMode::AccessExist) {
-                    return false;
+                    return Status::NOT_FOUND;
                 }
 
                 // Otherwise waiting
                 if (!backoff.next()) {
                     SHMAP_LOG("ShmHashTable[%zd] backoff timeout!", idx);
-                    return false;
+                    return Status::TIMEOUT;
                 }
             }
         }
-        return false; // table full or timeout
+        return Status::NOT_FOUND;
     }
 
-    template<typename Visitor>
-    bool Travel(Visitor&& visit, 
+    template<typename Visitor /* Status (idx, const Key&, Value&) */>
+    Status Travel(Visitor&& visit,
         std::chrono::nanoseconds timeout = std::chrono::seconds(5)) noexcept {
 
         Backoff backoff(timeout);
@@ -160,45 +166,48 @@ struct ShmHashTable {
                     uint32_t expected = Bucket::READY;
                     if (!b.state.compare_exchange_strong(expected, Bucket::ACCESSING,
                             std::memory_order_acq_rel, std::memory_order_acquire)) {
-                        if (!backoff.next()) return false;
+                        if (!backoff.next()) {
+                            return Status::TIMEOUT;
+                        }
                         continue;
                     }
 
-                    bool ok = ApplyVisitor(std::forward<Visitor>(visit), idx, b.key, b.value);
+                    Status status = ApplyVisitor(std::forward<Visitor>(visit), idx, b.key, b.value);
                     b.state.store(Bucket::READY, std::memory_order_release);
-                    if (!ok) return false;
+                    if (!status) return status;
 
                     break;
                 }
-                if (!backoff.next()) return false;
+                if (!backoff.next()) {
+                    return Status::TIMEOUT;
+                }
             }
         }
-        return true;
-    }    
+        return Status::SUCCESS;
+    }
 
 private:
     template<typename Visitor, typename ...Args>
-    bool ApplyVisitor(Visitor&& visit, Args&&... args) noexcept {
-        bool result = true;
+    Status ApplyVisitor(Visitor&& visit, Args&&... args) noexcept {
+        Status result = Status::SUCCESS;
         try {
-            if constexpr (std::is_same_v<std::invoke_result_t<Visitor, Args...>, bool>) {
-                // bool visitor -> return result
-                result = std::forward<Visitor>(visit)(std::forward<Args>(args)...);
-            } else if constexpr (std::is_same_v<std::invoke_result_t<Visitor, Args...>, void>) {
+            if constexpr (std::is_same_v<std::invoke_result_t<Visitor, Args...>, void>) {
                 // void visitor -> always success
                 std::forward<Visitor>(visit)(std::forward<Args>(args)...);
+            } else {
+                result = std::forward<Visitor>(visit)(std::forward<Args>(args)...);
             }
         } catch (...) {
-            result = false;
+            result = Status::ERROR;
         }
         return result;
     }
 
     template<typename Visitor>
-    bool ApplyVisitor(Visitor&& visit, VALUE* oldValue /* non-null only if rollback enabled */,
+    Status ApplyVisitor(Visitor&& visit, VALUE* oldValue /* non-null only if rollback enabled */,
         std::size_t idx, VALUE& value, bool isNew) noexcept {
 
-        bool result = ApplyVisitor(std::forward<Visitor>(visit), idx, value, isNew);
+        Status result = ApplyVisitor(std::forward<Visitor>(visit), idx, value, isNew);
         if (ROLLBACK_ENABLE) {
             if (!result && oldValue) {
                 // roll back

@@ -18,8 +18,7 @@ namespace shmap {
 
 template <typename T, std::size_t N>
 struct ShmVector {
-    static_assert(std::is_trivially_copyable_v<T>, "T must be trivially copyable");
-    static_assert(std::is_trivially_destructible_v<T>, "T must be trivially destructible");
+    static_assert(std::is_trivial_v<T>, "T must be trivial type");
     static_assert(N > 0, "Size must be positive");  
     
     std::size_t capacity() const noexcept {

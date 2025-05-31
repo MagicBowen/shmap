@@ -28,8 +28,6 @@ namespace shmap {
     #define SHMAP_LOG(FMT, ...)
 #endif
 
-
-
 }
 
 #endif
