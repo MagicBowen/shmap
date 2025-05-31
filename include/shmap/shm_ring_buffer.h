@@ -2,8 +2,10 @@
 * Copyright (c) wangbo@joycode.art 2024
 */
 
-#ifndef SHM_RING_BUFFER_H
-#define SHM_RING_BUFFER_H
+#ifndef SHMAP_SHM_RING_BUFFER_H
+#define SHMAP_SHM_RING_BUFFER_H
+
+#include "shmap/shmap.h"
 
 #include <array>
 #include <atomic>
@@ -13,12 +15,6 @@
 #include <type_traits>
 
 namespace shmap {
-
-#if __cpp_lib_hardware_interference_size >= 201603
-    constexpr std::size_t CACHE_LINE_SIZE = std::hardware_destructive_interference_size;
-#else
-    constexpr std::size_t CACHE_LINE_SIZE = 64;
-#endif
 
 template <typename T, std::size_t N>
 struct ShmRingBuffer {

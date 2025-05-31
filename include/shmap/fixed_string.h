@@ -2,8 +2,8 @@
 * Copyright (c) wangbo@joycode.art 2024
 */
 
-#ifndef FIXED_STRING_H
-#define FIXED_STRING_H
+#ifndef SHMAP_FIXED_STRING_H
+#define SHMAP_FIXED_STRING_H
 
 #include <string_view>
 #include <cstring>

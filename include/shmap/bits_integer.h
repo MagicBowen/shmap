@@ -1,5 +1,9 @@
-#ifndef BIT_FIELD_H
-#define BIT_FIELD_H
+/**
+* Copyright (c) wangbo@joycode.art 2024
+*/
+
+#ifndef SHMAP_BIT_FIELD_H
+#define SHMAP_BIT_FIELD_H
 
 #include <type_traits>
 #include <cstdint>
@@ -250,4 +254,4 @@ private:
 
 }
 
-#endif // BIT_FIELD_H
+#endif // SHMAP_BITS_INTEGER_H

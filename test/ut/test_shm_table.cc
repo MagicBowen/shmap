@@ -3,8 +3,8 @@
 #include <thread>
 #include <vector>
 
-#include "fixed_string.h"
-#include "shm_hash_table.h"
+#include "shmap/fixed_string.h"
+#include "shmap/shm_hash_table.h"
 
 using namespace shmap;
 

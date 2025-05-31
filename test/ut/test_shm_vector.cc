@@ -8,7 +8,7 @@
 #include <sys/mman.h>
 #include <fcntl.h>
 
-#include "shm_vector.h"
+#include "shmap/shm_vector.h"
 
 using namespace shmap;
 

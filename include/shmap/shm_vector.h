@@ -2,8 +2,10 @@
 * Copyright (c) wangbo@joycode.art 2024
 */
 
-#ifndef FIXED_VECTOR_H
-#define FIXED_VECTOR_H
+#ifndef SHMAP_SHM_VECTOR_H
+#define SHMAP_SHM_VECTOR_H
+
+#include "shmap/shmap.h"
 
 #include <array>
 #include <atomic>

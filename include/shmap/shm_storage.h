@@ -2,17 +2,15 @@
 * Copyright (c) wangbo@joycode.art 2024
 */
 
-#ifndef SHMAP_HPP_
-#define SHMAP_HPP_
+#ifndef SHMAP_SHM_STORAGE_H_
+#define SHMAP_SHM_STORAGE_H_
 
-#include "shmap_log.h"
+#include "shmap/shmap.h"
 
 #include <stdexcept>
-#include <cstdint>
 #include <string>
 #include <atomic>
 #include <thread>
-#include <new>
 
 #if defined(__unix__) || defined(__APPLE__)
     #include <fcntl.h>

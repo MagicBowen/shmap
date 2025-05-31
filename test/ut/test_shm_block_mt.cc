@@ -9,9 +9,9 @@
 #include <vector>
 #include <new>
 
-#include "shmap.h"
-#include "shm_hash_table.h"
-#include "fixed_string.h"
+#include "shmap/shm_storage.h"
+#include "shmap/shm_hash_table.h"
+#include "shmap/fixed_string.h"
 
 using namespace shmap;
 

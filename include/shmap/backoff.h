@@ -2,8 +2,8 @@
 * Copyright (c) wangbo@joycode.art 2024
 */
 
-#ifndef BACKOFF_H
-#define BACKOFF_H
+#ifndef SHMAP_BACKOFF_H
+#define SHMAP_BACKOFF_H
 
 #include <chrono>
 #include <thread>

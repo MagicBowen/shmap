@@ -2,11 +2,11 @@
 * Copyright (c) wangbo@joycode.art 2024
 */
 
-#ifndef SHMAP_HASH_TABLE_HPP_
-#define SHMAP_HASH_TABLE_HPP_
+#ifndef SHMAP_SHM_HASH_TABLE_H_
+#define SHMAP_SHM_HASH_TABLE_H_
 
-#include "shmap_log.h"
-#include "backoff.h"
+#include "shmap/shmap.h"
+#include "shmap/backoff.h"
 
 #include <type_traits>
 #include <cstddef>
@@ -15,12 +15,6 @@
 #include <atomic>
 
 namespace shmap {
-
-#if __cpp_lib_hardware_interference_size >= 201603
-    constexpr std::size_t CACHE_LINE_SIZE = std::hardware_destructive_interference_size;
-#else
-    constexpr std::size_t CACHE_LINE_SIZE = 64;
-#endif
 
 template<typename KEY, typename VALUE>
 struct alignas(CACHE_LINE_SIZE) ShmBucket {
@@ -222,4 +216,4 @@ private:
 
 } // namespace shmap
 
-#endif // SHMAP_HASH_TABLE_HPP_
+#endif // SHMAP_SHM_HASH_TABLE_H_

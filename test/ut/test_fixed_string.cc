@@ -4,7 +4,7 @@
 #include <unordered_map>
 #include <functional>
 
-#include "fixed_string.h"
+#include "shmap/fixed_string.h"
 
 using namespace shmap;
 

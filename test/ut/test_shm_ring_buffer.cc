@@ -9,7 +9,7 @@
 #include <sys/wait.h>
 #include <chrono>
 
-#include "shm_ring_buffer.h"
+#include "shmap/shm_ring_buffer.h"
 
 using namespace shmap;
 

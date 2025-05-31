@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include "bits_integer.h"
+#include "shmap/bits_integer.h"
 
 using namespace shmap;
 

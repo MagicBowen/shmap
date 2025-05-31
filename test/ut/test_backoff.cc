@@ -5,8 +5,8 @@
 #include <chrono>
 #include <numeric>
 
-#include "backoff.h"
-#include "shm_hash_table.h"
+#include "shmap/backoff.h"
+#include "shmap/shm_hash_table.h"
 
 using namespace shmap;
 using namespace std::chrono_literals;
