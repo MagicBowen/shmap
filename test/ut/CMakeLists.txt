@@ -16,6 +16,6 @@ target_include_directories(${TEST_TARGET}
             ${PROJECT_SOURCE_DIR}/include
             ${PROJECT_SOURCE_DIR}/test )
 
-target_link_libraries(${TEST_TARGET} PRIVATE gtest_main gtest)
+target_link_libraries(${TEST_TARGET} PRIVATE gtest_main gtest fixture)
 
 set_target_properties(${TEST_TARGET} PROPERTIES CXX_STANDARD 17)

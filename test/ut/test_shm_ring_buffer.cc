@@ -10,6 +10,7 @@
 #include <chrono>
 
 #include "shmap/shm_ring_buffer.h"
+#include "process_launcher.h"
 
 using namespace shmap;
 
@@ -97,36 +98,32 @@ TEST(ShmRingBufferTest, MultiThreadSPMC) {
 // -----------------------------------------------------------------------------
 // Cross-process single producer single consumer
 // -----------------------------------------------------------------------------
-TEST(ShmRingBufferTest, MultiProcess) {
-    const char* shm_name = "/shm_rb_test";
-    constexpr std::size_t CAP   = 256;
-    constexpr int         COUNT = 200;
+TEST(ShmRingBufferTest, MultiProcessWithLauncher) {
+    constexpr char   shm_name[] = "/shm_rb_test";
+    constexpr size_t CAP   = 256;
+    constexpr int    COUNT = 200;
 
     shm_unlink(shm_name);
-    int fd = shm_open(shm_name, O_CREAT|O_EXCL|O_RDWR, 0600);
+    int fd = shm_open(shm_name, O_CREAT | O_EXCL | O_RDWR, 0600);
     ASSERT_GE(fd, 0);
     ASSERT_EQ(ftruncate(fd, sizeof(ShmRingBuffer<int,CAP>)), 0);
 
-    void* addr = mmap(nullptr, sizeof(ShmRingBuffer<int,CAP>),
-                      PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
+    void* addr = mmap(nullptr, sizeof(ShmRingBuffer<int,CAP>), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     ASSERT_NE(addr, MAP_FAILED);
     close(fd);
 
     auto* rb = new (addr) ShmRingBuffer<int,CAP>();
     rb->clear();
 
-    pid_t pid = fork();
-    ASSERT_GE(pid, 0);
-    if (pid == 0) {
-        // consumer in child
+    ProcessLauncher launcher;
+
+    /* ---- Launch one consumer processor ---- */
+    auto consumer = launcher.Launch("rb_consumer", [rb] {
         std::vector<bool> seen(COUNT, false);
         int got = 0;
         while (got < COUNT) {
             auto o = rb->pop();
-            if (!o) {
-                usleep(50);
-                continue;
-            }
+            if (!o) { usleep(50); continue; }
             int v = *o;
             if (v >= 0 && v < COUNT && !seen[v]) {
                 seen[v] = true;
@@ -134,20 +131,22 @@ TEST(ShmRingBufferTest, MultiProcess) {
             }
         }
         for (int i = 0; i < COUNT; ++i) {
-            if (!seen[i]) _exit(1);
+            if (!seen[i]) throw std::runtime_error("missing element");
         }
-        _exit(0);
-    } else {
-        // producer in parent
-        for (int i = 0; i < COUNT; ++i) {
-            while (!rb->push(i)) {
-                usleep(10);
-            }
-        }
-        int status = 0;
-        waitpid(pid, &status, 0);
-        EXPECT_TRUE(WIFEXITED(status) && WEXITSTATUS(status) == 0);
-        munmap(addr, sizeof(ShmRingBuffer<int,CAP>));
-        shm_unlink(shm_name);
+    });
+    ASSERT_TRUE(consumer);
+
+    /* ---- Parent processor produces data ---- */
+    for (int i = 0; i < COUNT; ++i) {
+        while (!rb->push(i)) usleep(10);
     }
+
+    /* ---- Wait for consumer to finish ---- */
+    auto res = launcher.wait({consumer}, std::chrono::seconds(10));
+    ASSERT_EQ(res.size(), 1u);
+    EXPECT_EQ(res[0].status, Status::SUCCESS) << res[0].detail;
+
+    launcher.Stop(consumer);
+    munmap(addr, sizeof(ShmRingBuffer<int,CAP>));
+    shm_unlink(shm_name);
 }

@@ -9,6 +9,7 @@
 #include <fcntl.h>
 
 #include "shmap/shm_vector.h"
+#include "process_launcher.h"
 
 using namespace shmap;
 
@@ -106,61 +107,64 @@ TEST(ShmVectorTest, MultiThreadedPushBack) {
 // =============================================================================
 // Multi-Process Test (POSIX shared memory + fork)
 // =============================================================================
+TEST(ShmVectorTest, MultiProcessSharedMemoryWithLauncher) {
+    constexpr char  shm_name[] = "/shm_vector_test";
+    constexpr size_t CAP       = 1024;
+    constexpr int    NPROC     = 4;
+    constexpr int    PER_PROC  = 100;
 
-TEST(ShmVectorTest, MultiProcessSharedMemory) {
-    const char* shm_name = "/shm_vector_test";
-    const std::size_t CAP = 1024;
     shm_unlink(shm_name);
-
     int fd = shm_open(shm_name, O_CREAT | O_EXCL | O_RDWR, 0600);
-    ASSERT_GE(fd, 0) << "shm_open failed";
+    ASSERT_GE(fd, 0);
+    ASSERT_EQ(ftruncate(fd, sizeof(ShmVector<int,CAP>)), 0);
 
-    ASSERT_EQ(ftruncate(fd, sizeof(ShmVector<int, CAP>)), 0);
-
-    void* addr = mmap(nullptr, sizeof(ShmVector<int, CAP>), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    void* addr = mmap(nullptr, sizeof(ShmVector<int,CAP>), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     ASSERT_NE(addr, MAP_FAILED);
     close(fd);
 
-    auto* v = new (addr) ShmVector<int, CAP>{};
+    auto* vec = new (addr) ShmVector<int,CAP>{};
 
-    const int nproc = 4;
-    const int per_proc = 100;
-    std::vector<pid_t> pids;
+    ProcessLauncher launcher;
+    std::vector<Processor> procs;
+    procs.reserve(NPROC);
 
-    for (int p = 0; p < nproc; ++p) {
-        pid_t pid = fork();
-        ASSERT_GE(pid, 0);
+    /* ----- Launch NPROC 子进程，每个进程写 PER_PROC 个元素 ----- */
+    for (int p = 0; p < NPROC; ++p) {
+        procs.emplace_back(
+            launcher.Launch("vec_writer_" + std::to_string(p),
+                [p, vec] {
+                    auto off = vec->allocate(PER_PROC);
+                    if (!off) throw std::runtime_error("allocate failed");
 
-        if (pid == 0) {
-            // child
-            auto off = v->allocate(per_proc);
-            if (!off) _exit(1);
-            for (int i = 0; i < per_proc; ++i) {
-                (*v)[*off + i] = p * per_proc + i;
-            }
-            _exit(0);
-        } else {
-            pids.push_back(pid);
-        }
-    }
-    for (pid_t pid : pids) {
-        int status;
-        waitpid(pid, &status, 0);
-        ASSERT_TRUE(WIFEXITED(status) && WEXITSTATUS(status) == 0);
+                    for (int i = 0; i < PER_PROC; ++i) {
+                        (*vec)[*off + i] = p * PER_PROC + i;
+                    }
+                }));
+        ASSERT_TRUE(procs.back());
     }
 
-    EXPECT_EQ(v->size(), nproc * per_proc);
-    std::vector<bool> seen(nproc * per_proc, false);
-    for (std::size_t i = 0; i < v->size(); ++i) {
-        int x = (*v)[i];
-        ASSERT_GE(x, 0);
-        ASSERT_LT(x, nproc * per_proc);
-        seen[x] = true;
+    auto results = launcher.wait(procs, std::chrono::seconds(5));
+
+    for (auto& r : results) {
+        EXPECT_EQ(r.status, Status::SUCCESS) << r.detail;
+    }
+
+    launcher.Stop(procs);
+
+    /* ----- 校验向量内容完整性 ----- */
+    EXPECT_EQ(vec->size(), static_cast<size_t>(NPROC * PER_PROC));
+
+    std::vector<bool> seen(NPROC * PER_PROC, false);
+    for (std::size_t i = 0; i < vec->size(); ++i) {
+        int v = (*vec)[i];
+        ASSERT_GE(v, 0);
+        ASSERT_LT(v, NPROC * PER_PROC);
+        seen[v] = true;
     }
     for (bool b : seen) {
         EXPECT_TRUE(b);
     }
 
-    munmap(addr, sizeof(ShmVector<int, CAP>));
+    munmap(addr, sizeof(ShmVector<int,CAP>));
     shm_unlink(shm_name);
 }

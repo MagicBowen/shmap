@@ -20,7 +20,7 @@ template <typename T, std::size_t N>
 struct ShmVector {
     static_assert(std::is_trivially_copyable<T>::value, "T must be trivially copyable");
     static_assert(std::is_standard_layout<T>::value, "T should be standard layout!");
-    
+
     static_assert(N > 0, "Size must be positive");
 
     std::size_t capacity() const noexcept {
@@ -64,17 +64,24 @@ struct ShmVector {
         return idx;
     }
 
-    // Element access
-    T& operator[](std::size_t i) noexcept {
+    T* at(std::size_t i) noexcept {
         assert(i < N && "Index out of bounds");
         assert(i < size_.load(std::memory_order_acquire));
-        return data_[i]; 
+        return &data_[i]; 
+    }
+
+    const T* at(std::size_t i) const noexcept { 
+        assert(i < N && "Index out of bounds");
+        assert(i < size_.load(std::memory_order_acquire));
+        return &data_[i]; 
+    }
+
+    T& operator[](std::size_t i) noexcept {
+        return *at(i); 
     }
 
     const T& operator[](std::size_t i) const noexcept { 
-        assert(i < N && "Index out of bounds");
-        assert(i < size_.load(std::memory_order_acquire));
-        return data_[i]; 
+        return *at(i); 
     }
 
     // Iterators

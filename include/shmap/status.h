@@ -15,6 +15,7 @@ struct Status {
     enum Code : uint32_t {
         SUCCESS = 0,
         ERROR,
+        EXCEPTION,
         NOT_FOUND,
         ALREADY_EXISTS,
         TIMEOUT,
@@ -22,6 +23,7 @@ struct Status {
         OUT_OF_MEMORY,
         INVALID_ARGUMENT,
         NOT_IMPLEMENTED,
+        CRASH,
         UNKNOWN,
     };
 
@@ -54,6 +56,7 @@ struct Status {
         switch (code_) {
             case Code::SUCCESS:          return "SUCCESS";
             case Code::ERROR:            return "ERROR";
+            case Code::EXCEPTION:        return "EXCEPTION";
             case Code::NOT_FOUND:        return "NOT_FOUND";
             case Code::ALREADY_EXISTS:   return "ALREADY_EXISTS";
             case Code::TIMEOUT:          return "TIMEOUT";
@@ -61,6 +64,7 @@ struct Status {
             case Code::OUT_OF_MEMORY:    return "OUT_OF_MEMORY";
             case Code::INVALID_ARGUMENT: return "INVALID_ARGUMENT";
             case Code::NOT_IMPLEMENTED:  return "NOT_IMPLEMENTED";
+            case Code::CRASH:            return "CRASH";
             default:
                 return "UNKNOWN(" + std::to_string(static_cast<uint32_t>(code_)) + ")";
         }
