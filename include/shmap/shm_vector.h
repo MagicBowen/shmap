@@ -20,8 +20,7 @@ template <typename T, std::size_t N>
 struct ShmVector {
     static_assert(std::is_trivially_copyable<T>::value, "T must be trivially copyable");
     static_assert(std::is_standard_layout<T>::value, "T should be standard layout!");
-
-    static_assert(N > 0, "Size must be positive");
+    static_assert(N && (N & (N - 1)) == 0,  "Capacity must be power of two for cheap modulo");
 
     std::size_t capacity() const noexcept {
          return N; 

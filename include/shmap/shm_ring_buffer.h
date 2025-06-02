@@ -83,7 +83,7 @@ private:
 
 
 /* -------------------------------------------------------------------------- */
-/*                              ShmRingBugger - SPMC                          */
+/*       ShmRingBugger - SPMC （only one consumer fetches data success）       */
 /* -------------------------------------------------------------------------- */
 template <typename T, std::size_t N>
 struct ShmSpMcRingBuffer {
@@ -166,6 +166,78 @@ private:
     alignas(CACHE_LINE_SIZE) std::atomic<std::size_t> tail_{0};
 };
 
+/* -------------------------------------------------------------------------- */
+/*           ShmRingBugger - SPMC (all consumers fetch data success）         */
+/* -------------------------------------------------------------------------- */
+template<typename T, std::size_t N, std::size_t MAX_CONCUMER = 8>
+struct BroadcastRingBuffer {
+    static_assert(std::is_trivially_copyable_v<T>);
+    static_assert(std::is_standard_layout<T>::value, "T should be standard layout!");
+    static_assert((N & (N - 1)) == 0, "N must be power-of-two");
+
+    // parent processor invoke once
+    void init(std::uint32_t consumers) noexcept {
+        consumer_cnt_.store(consumers, std::memory_order_relaxed);
+        for (std::size_t i = 0; i < N; ++i) {
+            slots_[i].seq.store(i, std::memory_order_relaxed); 
+        }
+    }
+
+    bool push(const T& v) noexcept {
+        const std::size_t pos = tail_.fetch_add(1, std::memory_order_relaxed);
+        Slot& s = slots_[pos & (N - 1)];
+
+        while (s.remain.load(std::memory_order_acquire) != 0) {
+            std::this_thread::yield();
+        }
+
+        s.data = v;
+
+        s.seq.store(pos, std::memory_order_release);
+        s.remain.store(consumer_cnt_.load(std::memory_order_relaxed), std::memory_order_release);
+        return true;
+    }
+
+    struct Consumer {
+        BroadcastRingBuffer* rb{};
+        std::size_t cursor{0};
+
+        std::optional<T> pop() noexcept {
+            Slot& slot = rb->slots_[cursor & (N - 1)];
+            uint64_t seq = slot.seq.load(std::memory_order_acquire);
+            if (seq != cursor) {
+                return std::nullopt;
+            }
+
+            uint32_t r = slot.remain.load(std::memory_order_acquire);
+            if (r == 0) {
+                return std::nullopt;
+            }
+
+            T v = slot.data;
+
+            slot.remain.fetch_sub(1, std::memory_order_acq_rel);
+            ++cursor;
+            return v;
+        }
+    };
+
+    Consumer make_consumer() noexcept { 
+        return Consumer{this, 0}; 
+    }
+
+private:
+    struct Slot {
+        alignas(64) std::atomic<uint64_t> seq{0};
+        T data;
+        std::atomic<uint32_t> remain{0};
+    };
+
+private:
+    alignas(64) std::array<Slot, N> slots_{};
+    alignas(64) std::atomic<std::size_t> tail_{0};
+    alignas(64) std::atomic<uint32_t> consumer_cnt_{0};
+};
 
 }
 

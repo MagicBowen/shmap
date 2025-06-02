@@ -34,11 +34,10 @@ struct TaskResult {
 
 using ProcessTask = std::function<void()>;
 
-enum class ProcessCmdType {
-    RUN = 1,
+enum class ProcessCmdType : uint32_t {
+    RUN  = 1,
     STOP = 2,
 };
-
 
 /* -------------------------------------------------------------------------- */
 /*                                     Processor                              */
@@ -103,7 +102,7 @@ private:
     struct Cmd { 
         Cmd() : idx(0), type(ProcessCmdType::RUN) {}
         Cmd(uint32_t i, ProcessCmdType t) : idx(i), type(t) {}
-        uint32_t idx; 
+        uint32_t idx;  // only used in RUN.
         ProcessCmdType type; 
     };
 

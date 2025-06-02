@@ -16,7 +16,7 @@ endif()
 option(ENABLE_UT   "Build unit tests" ON)
 option(ENABLE_BT   "Build bench tests" OFF)
 option(ENABLE_ASON "Enable AddressSanitizer" OFF)
-option(ENABLE_TSAN "Enable ThreadSanitizer" OFF)
+option(ENABLE_TSAN "Enable ThreadSanitizer" ON)
 
 set(CMAKE_CXX_STANDARD 17)
 

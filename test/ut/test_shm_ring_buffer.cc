@@ -40,62 +40,6 @@ TEST(ShmRingBufferTest, BasicSingleThread) {
 }
 
 // -----------------------------------------------------------------------------
-// Multi-thread SPMC: 1 producer, multiple consumers share the work
-// -----------------------------------------------------------------------------
-TEST(ShmRingBufferTest, MultiThreadSPMC) {
-    constexpr int PRODUCE   = 10000;
-    constexpr int CONSUMERS = 4;
-
-    ShmSpMcRingBuffer<int, 1024> rb;
-    std::atomic<int> consumed{0};
-    std::vector<std::vector<bool>> seen(CONSUMERS, std::vector<bool>(PRODUCE, false));
-
-    std::vector<std::thread> consumers;
-    // consumers
-    for (int c = 0; c < CONSUMERS; ++c) {
-        consumers.emplace_back([&rb, &consumed, &seen, c]() {
-            while (true) {
-                int done = consumed.load(std::memory_order_acquire);
-                if (done >= PRODUCE) break;
-                auto o = rb.pop();
-                if (!o) {
-                    std::this_thread::yield();
-                    continue;
-                }
-                int v = *o;
-                if (v >= 0 && v < PRODUCE) {
-                    seen[c][v] = true;
-                    consumed.fetch_add(1, std::memory_order_acq_rel);
-                }
-            }
-        });
-    }
-
-    // producer
-    std::thread producer([&rb]() {
-        for (int i = 0; i < PRODUCE; ++i) {
-            while (!rb.push(i)) {
-                std::this_thread::yield();
-            }
-        }
-    });
-
-    producer.join();
-    for (auto& th : consumers) th.join();
-
-    // aggregate
-    std::vector<bool> agg(PRODUCE, false);
-    for (int c = 0; c < CONSUMERS; ++c) {
-        for (int i = 0; i < PRODUCE; ++i) {
-            if (seen[c][i]) agg[i] = true;
-        }
-    }
-    for (int i = 0; i < PRODUCE; ++i) {
-        EXPECT_TRUE(agg[i]) << "value " << i << " missing";
-    }
-}
-
-// -----------------------------------------------------------------------------
 // Cross-process single producer single consumer
 // -----------------------------------------------------------------------------
 TEST(ShmRingBufferTest, MultiProcessWithLauncher) {
@@ -149,4 +93,112 @@ TEST(ShmRingBufferTest, MultiProcessWithLauncher) {
     launcher.Stop(consumer);
     munmap(addr, sizeof(ShmRingBuffer<int,CAP>));
     shm_unlink(shm_name);
+}
+
+// -----------------------------------------------------------------------------
+// Multi-thread SPMC: 1 producer, multiple consumers share the work
+// -----------------------------------------------------------------------------
+TEST(ShmSpMcRingBufferTest, MultiThreadSPMC) {
+    constexpr int PRODUCE   = 10000;
+    constexpr int CONSUMERS = 4;
+
+    ShmSpMcRingBuffer<int, 1024> rb;
+    std::atomic<int> consumed{0};
+    std::vector<std::vector<bool>> seen(CONSUMERS, std::vector<bool>(PRODUCE, false));
+
+    std::vector<std::thread> consumers;
+    // consumers
+    for (int c = 0; c < CONSUMERS; ++c) {
+        consumers.emplace_back([&rb, &consumed, &seen, c]() {
+            while (true) {
+                int done = consumed.load(std::memory_order_acquire);
+                if (done >= PRODUCE) break;
+                auto o = rb.pop();
+                if (!o) {
+                    std::this_thread::yield();
+                    continue;
+                }
+                int v = *o;
+                if (v >= 0 && v < PRODUCE) {
+                    seen[c][v] = true;
+                    consumed.fetch_add(1, std::memory_order_acq_rel);
+                }
+            }
+        });
+    }
+
+    // producer
+    std::thread producer([&rb]() {
+        for (int i = 0; i < PRODUCE; ++i) {
+            while (!rb.push(i)) {
+                std::this_thread::yield();
+            }
+        }
+    });
+
+    producer.join();
+    for (auto& th : consumers) th.join();
+
+    // aggregate
+    std::vector<bool> agg(PRODUCE, false);
+    for (int c = 0; c < CONSUMERS; ++c) {
+        for (int i = 0; i < PRODUCE; ++i) {
+            if (seen[c][i]) agg[i] = true;
+        }
+    }
+    for (int i = 0; i < PRODUCE; ++i) {
+        EXPECT_TRUE(agg[i]) << "value " << i << " missing";
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Broadcast SPMC: 1 producer, multiple consumers share the work
+// -----------------------------------------------------------------------------
+TEST(BroadcastRingBuffer, MultiProcessLikeBroadcast) {
+    constexpr int CAP       = 1024;
+    constexpr int CONSUMERS = 3;
+    constexpr int PRODUCE   = 50'000;
+
+    BroadcastRingBuffer<int, CAP, CONSUMERS> rb;
+    rb.init(CONSUMERS);
+
+    std::array<BroadcastRingBuffer<int,CAP,CONSUMERS>::Consumer, CONSUMERS> consumers;
+    for (int i = 0; i < CONSUMERS; ++i) {
+        consumers[i] = rb.make_consumer();
+    }
+
+    std::vector<std::thread> consumer_ths;
+    std::vector<std::vector<int>> seen(CONSUMERS);
+
+    for (int id = 0; id < CONSUMERS; ++id) {
+        consumer_ths.emplace_back([id, &consumers, &seen, PRODUCE]{
+            seen[id].reserve(PRODUCE);
+            while (seen[id].size() < static_cast<std::size_t>(PRODUCE)) {
+                auto o = consumers[id].pop();
+                if (!o) { 
+                    std::this_thread::yield(); 
+                    continue; 
+                }
+                seen[id].push_back(*o);
+            }
+        });
+    }
+
+    std::thread producer([&]{
+        for (int i = 0; i < PRODUCE; ++i) {
+            while (!rb.push(i)) {
+                std::this_thread::yield();
+            }
+        }
+    });
+
+    producer.join();
+    for (auto& th: consumer_ths) th.join();
+
+    for (int id = 0; id < CONSUMERS; ++id) {
+        ASSERT_EQ(seen[id].size(), PRODUCE);
+        for (int i = 0; i < PRODUCE; ++i) {
+            EXPECT_EQ(seen[id][i], i);
+        }
+    }
 }

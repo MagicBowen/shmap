@@ -47,34 +47,34 @@ TEST(ShmVectorTest, BasicSingleThread) {
 }
 
 TEST(ShmVectorTest, AllocateBlocks) {
-    ShmVector<long, 100> v{};
+    ShmVector<long, 128> v{};
     // Reserve 5 slots
     auto off1 = v.allocate(5);
     ASSERT_TRUE(off1.has_value());
     for (int i = 0; i < 5; ++i) {
-        v[*off1 + i] = 100 + i;
+        v[*off1 + i] = 128 + i;
     }
     // Reserve another 10
     auto off2 = v.allocate(10);
     ASSERT_TRUE(off2.has_value());
     for (int i = 0; i < 10; ++i) {
-        v[*off2 + i] = 200 + i;
+        v[*off2 + i] = 256 + i;
     }
     EXPECT_EQ(v.size(), 15u);
 
     // Check contents
     for (int i = 0; i < 5; ++i) {
-        EXPECT_EQ(v[*off1 + i], 100 + i);
+        EXPECT_EQ(v[*off1 + i], 128 + i);
     }
     for (int i = 0; i < 10; ++i) {
-        EXPECT_EQ(v[*off2 + i], 200 + i);
+        EXPECT_EQ(v[*off2 + i], 256 + i);
     }
 }
 
 TEST(ShmVectorTest, MultiThreadedPushBack) {
-    ShmVector<int, 10000> v{};
+    ShmVector<int, 8192> v{};
     const int nthreads = 8;
-    const int per_thread = 1000;
+    const int per_thread = 1024;
     std::vector<std::thread> threads;
     threads.reserve(nthreads);
     for (int t = 0; t < nthreads; ++t) {

@@ -67,12 +67,12 @@ bool ProcessLauncher::SendStop(const Processor& p) {
     if (!p) {
         return false;
     }
-    Cmd cmd{2, ProcessCmdType::STOP};
+    Cmd cmd{0, ProcessCmdType::STOP};
     ssize_t n = ::write(p.GetCmdFd(), &cmd, sizeof(cmd));
     if (n == -1 && errno == EPIPE) {
         return true;
     }
-    return n == sizeof(cmd);
+    return n == sizeof(cmd);    
 }
 
 std::vector<TaskResult> ProcessLauncher::wait(const std::vector<Processor>& ps, std::chrono::milliseconds timeout) {
@@ -148,7 +148,9 @@ void ProcessLauncher::ChildLoop(int cmdR, int resW, SharedStore* store) {
         shmap::Status status = shmap::Status::SUCCESS;
         std::string msg = "success";
         try {
-            (*store->at(cmd.idx))();
+            auto* task = store->at(cmd.idx);
+            (*task)();
+            task->~ProcessTask();  // recycle
         } catch (const std::exception& e) {
             status  = shmap::Status::EXCEPTION;
             msg = e.what();
