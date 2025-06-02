@@ -175,7 +175,7 @@ struct BroadcastRingBuffer {
     static_assert(std::is_standard_layout<T>::value, "T should be standard layout!");
     static_assert((N & (N - 1)) == 0, "N must be power-of-two");
 
-    // parent processor invoke once
+    // Parent processor invoke once
     void init(std::uint32_t consumers) noexcept {
         consumer_cnt_.store(consumers, std::memory_order_relaxed);
         for (std::size_t i = 0; i < N; ++i) {
@@ -183,18 +183,41 @@ struct BroadcastRingBuffer {
         }
     }
 
+    /* Only instantaneous estimates are provided. */
+    std::size_t size() const noexcept {
+        std::size_t tail = tail_.load(std::memory_order_acquire);
+        std::size_t head = tail > N ? tail - N : 0;
+        std::size_t cnt  = 0;
+        for (std::size_t pos = head; pos < tail; ++pos) {
+            const Slot& s = slots_[pos & (N - 1)];
+            if (s.remain.load(std::memory_order_acquire) != 0) {
+                ++cnt;
+            }
+        }
+        return cnt;
+    }
+
+    /* Only used when procuder and all consumers stoped */
+    void clear() noexcept {
+        tail_.store(0, std::memory_order_relaxed);
+        for (std::size_t i = 0; i < N; ++i) {
+            slots_[i].seq.  store(i,  std::memory_order_relaxed);
+            slots_[i].remain.store(0, std::memory_order_relaxed);
+        }
+    }
+
     bool push(const T& v) noexcept {
         const std::size_t pos = tail_.fetch_add(1, std::memory_order_relaxed);
-        Slot& s = slots_[pos & (N - 1)];
+        Slot& slot = slots_[pos & (N - 1)];
 
-        while (s.remain.load(std::memory_order_acquire) != 0) {
+        while (slot.remain.load(std::memory_order_acquire) != 0) {
             std::this_thread::yield();
         }
 
-        s.data = v;
+        slot.data = v;
 
-        s.seq.store(pos, std::memory_order_release);
-        s.remain.store(consumer_cnt_.load(std::memory_order_relaxed), std::memory_order_release);
+        slot.seq.store(pos, std::memory_order_release);
+        slot.remain.store(consumer_cnt_.load(std::memory_order_relaxed), std::memory_order_release);
         return true;
     }
 
