@@ -46,11 +46,11 @@ TEST(ShmRingBufferTest, MultiThreadSPMC) {
     constexpr int PRODUCE   = 10000;
     constexpr int CONSUMERS = 4;
 
-    ShmRingBuffer<int, 1024> rb;
+    ShmSpMcRingBuffer<int, 1024> rb;
     std::atomic<int> consumed{0};
     std::vector<std::vector<bool>> seen(CONSUMERS, std::vector<bool>(PRODUCE, false));
-    std::vector<std::thread> consumers;
 
+    std::vector<std::thread> consumers;
     // consumers
     for (int c = 0; c < CONSUMERS; ++c) {
         consumers.emplace_back([&rb, &consumed, &seen, c]() {
@@ -72,7 +72,7 @@ TEST(ShmRingBufferTest, MultiThreadSPMC) {
     }
 
     // producer
-    std::thread prod([&rb]() {
+    std::thread producer([&rb]() {
         for (int i = 0; i < PRODUCE; ++i) {
             while (!rb.push(i)) {
                 std::this_thread::yield();
@@ -80,7 +80,7 @@ TEST(ShmRingBufferTest, MultiThreadSPMC) {
         }
     });
 
-    prod.join();
+    producer.join();
     for (auto& th : consumers) th.join();
 
     // aggregate

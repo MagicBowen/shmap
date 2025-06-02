@@ -68,7 +68,11 @@ bool ProcessLauncher::SendStop(const Processor& p) {
         return false;
     }
     Cmd cmd{2, ProcessCmdType::STOP};
-    return write(p.GetCmdFd(), &cmd, sizeof(cmd)) == sizeof(cmd);
+    ssize_t n = ::write(p.GetCmdFd(), &cmd, sizeof(cmd));
+    if (n == -1 && errno == EPIPE) {
+        return true;
+    }
+    return n == sizeof(cmd);
 }
 
 std::vector<TaskResult> ProcessLauncher::wait(const std::vector<Processor>& ps, std::chrono::milliseconds timeout) {

@@ -43,12 +43,19 @@ TEST(ProcessLauncher, NormalAndException) {
     ProcessLauncher launcher;
     auto p1 = launcher.Launch("ok", []{});
     auto p2 = launcher.Launch("exp", []{ throw std::runtime_error("err"); });
+    auto p3 = launcher.Launch("crash", [](){ std::raise(SIGSEGV); });
+    auto p4 = launcher.Launch("crash", [](){
+        *((volatile int*)nullptr) = 1;
+    });
 
-    auto r = launcher.wait({p1, p2}, std::chrono::milliseconds(500));
-    ASSERT_EQ(r.size(), 2u);
+    auto r = launcher.wait({p1, p2, p3, p4}, std::chrono::milliseconds(500));
+    ASSERT_EQ(r.size(), 4u);
 
     EXPECT_EQ(r[0].status, shmap::Status::SUCCESS);
     EXPECT_EQ(r[1].status, shmap::Status::EXCEPTION);
+    EXPECT_EQ(r[2].status, shmap::Status::CRASH);
+    EXPECT_EQ(r[3].status, shmap::Status::CRASH);
+
     launcher.Stop(p1, p2);
 }
 
