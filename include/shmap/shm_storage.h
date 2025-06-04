@@ -42,12 +42,12 @@ struct ShmBlock {
                 std::memory_order_acq_rel, std::memory_order_acquire)) {
             new (&block->table_) TABLE();
             block->state.store(READY, std::memory_order_release);
-            SHMAP_LOG("ShmBlock create and new block!");
+            SHMAP_DEBUG_LOG("ShmBlock create and new block!");
             return block;
         }
         else {
             block->WaitReady();
-            SHMAP_LOG("ShmBlock create and wait block!");
+            SHMAP_DEBUG_LOG("ShmBlock create and wait block!");
             return block;
         }
     }
@@ -55,7 +55,7 @@ struct ShmBlock {
     static ShmBlock* Open(void* mem) noexcept {
         auto* block = static_cast<ShmBlock*>(mem);
         block->WaitReady();
-        SHMAP_LOG("ShmBlock open and wait block!");
+        SHMAP_DEBUG_LOG("ShmBlock open and wait block!");
         return block;
     }
 
@@ -107,6 +107,14 @@ struct ShmStorage {
         shm_unlink(SHM_PATH::value);
     }
 
+    // Only used in none parallel scenarios by owner
+    void Clear() {
+        if (owner_) {
+            memset(addr_, 0x0, memBytes_);
+            block_ = Block::Create(addr_);
+        }
+    }
+
 
     TABLE* operator->() noexcept  { return &(**block_); }
     TABLE& operator* () noexcept  { return  **block_; }
@@ -127,7 +135,7 @@ private:
                 ::shm_unlink(path);
                 throw std::runtime_error("ftruncate failed: " + std::to_string(e));
             }
-            SHMAP_LOG("ShmStorage construct %s!", SHM_PATH::value);
+            SHMAP_DEBUG_LOG("ShmStorage construct %s!", SHM_PATH::value);
         }
         else if (errno == EEXIST) {
             fd_ = ::shm_open(path, O_RDWR, 0666);
@@ -135,7 +143,7 @@ private:
                 int e = errno;
                 throw std::runtime_error("shm_open O_RDWR failed: " + std::to_string(e));
             }
-            SHMAP_LOG("ShmStorage open %s!", SHM_PATH::value);
+            SHMAP_DEBUG_LOG("ShmStorage open %s!", SHM_PATH::value);
         }
         else {
             int e = errno;
@@ -170,7 +178,7 @@ private:
             ::close(fd_);
             fd_ = -1;
         }
-        SHMAP_LOG("ShmStorage close %s!", SHM_PATH::value);
+        SHMAP_DEBUG_LOG("ShmStorage close %s!", SHM_PATH::value);
     }
 
 private:

@@ -143,7 +143,7 @@ TEST(ShmVectorTest, MultiProcessSharedMemoryWithLauncher) {
         ASSERT_TRUE(procs.back());
     }
 
-    auto results = launcher.wait(procs, std::chrono::seconds(5));
+    auto results = launcher.Wait(procs, std::chrono::seconds(5));
 
     for (auto& r : results) {
         EXPECT_EQ(r.status, Status::SUCCESS) << r.detail;

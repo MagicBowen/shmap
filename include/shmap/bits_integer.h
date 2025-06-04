@@ -205,11 +205,11 @@ struct BitsInteger {
         return *this;
     }
 
-    constexpr UnderlyingType GetRawValue() const noexcept {
+    constexpr UnderlyingType GetValue() const noexcept {
         return value_;
     }
     
-    void SetRawValue(UnderlyingType value) noexcept {
+    void SetValue(UnderlyingType value) noexcept {
         value_ = value;
     }
 
@@ -252,6 +252,25 @@ private:
     UnderlyingType value_;
 };
 
+}
+
+namespace std {
+    template<typename UnderlyingType, typename... Fields>
+    struct hash<shmap::BitsInteger<UnderlyingType, Fields...>> {
+        std::size_t operator()(const shmap::BitsInteger<UnderlyingType, Fields...>& bi) const noexcept {
+            return std::hash<typename shmap::BitsInteger<UnderlyingType, Fields...>::UnderlyingType>()(
+                bi.GetValue()
+            );
+        }
+    };
+
+    template<typename UnderlyingType, typename... Fields>
+    struct equal_to<shmap::BitsInteger<UnderlyingType, Fields...>> {
+        bool operator()(const shmap::BitsInteger<UnderlyingType, Fields...>& lhs, 
+                        const shmap::BitsInteger<UnderlyingType, Fields...>& rhs) const noexcept {
+            return lhs == rhs;
+        }
+    };
 }
 
 #endif // SHMAP_BITS_INTEGER_H

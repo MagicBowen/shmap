@@ -38,7 +38,7 @@ Processor ProcessLauncher::Launch(const std::string& name, ProcessTask task) {
         close(cmdPipe[1]); // child read
         close(resPipe[0]); // child write
         ChildLoop(cmdPipe[0], resPipe[1], store_);
-        _exit(0);
+        exit(0);
     }
 
     // parent process
@@ -75,7 +75,7 @@ bool ProcessLauncher::SendStop(const Processor& p) {
     return n == sizeof(cmd);    
 }
 
-std::vector<TaskResult> ProcessLauncher::wait(const std::vector<Processor>& ps, std::chrono::milliseconds timeout) {
+std::vector<TaskResult> ProcessLauncher::Wait(const std::vector<Processor>& ps, std::chrono::milliseconds timeout) {
     std::vector<TaskResult> results(ps.size());
     std::vector<pollfd> fds;
     fds.reserve(ps.size());
@@ -149,8 +149,13 @@ void ProcessLauncher::ChildLoop(int cmdR, int resW, SharedStore* store) {
         std::string msg = "success";
         try {
             auto* task = store->at(cmd.idx);
-            (*task)();
-            task->~ProcessTask();  // recycle
+            if (task) {
+                (*task)();
+                task->~ProcessTask();  // recycle
+            } else {
+                shmap::Status status = shmap::Status::NOT_FOUND;
+                std::string msg = "task nil";
+            }
         } catch (const std::exception& e) {
             status  = shmap::Status::EXCEPTION;
             msg = e.what();

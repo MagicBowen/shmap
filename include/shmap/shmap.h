@@ -23,9 +23,10 @@ namespace shmap {
 #endif
 
 #if SHMAP_DEBUG_ENABLE
-    #define SHMAP_LOG(FMT, ...) printf("[%s:%d:%d]" FMT "\n", __FILE__, __LINE__, getpid(), ##__VA_ARGS__)
+    #define SHMAP_DEBUG_LOG(FMT, ...) \
+    printf("[%s:%d:%d]" FMT "\n", __FILE__, __LINE__, getpid(), ##__VA_ARGS__)
 #else
-    #define SHMAP_LOG(FMT, ...)
+    #define SHMAP_DEBUG_LOG(FMT, ...)
 #endif
 
 }

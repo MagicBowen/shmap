@@ -83,13 +83,13 @@ struct ShmHashTable {
                     if (!b.state.compare_exchange_strong(expectState, Bucket::ACCESSING,
                             std::memory_order_acq_rel, std::memory_order_acquire)) {
                         if (!backoff.next()) {
-                            SHMAP_LOG("ShmHashTable[%zd] backoff timeout!", idx);
+                            SHMAP_DEBUG_LOG("ShmHashTable[%zd] backoff timeout!", idx);
                             return Status::TIMEOUT;
                         }
                         continue;
                     }
 
-                    SHMAP_LOG("ShmHashTable[%zd] from READY to ACCESSING!", idx);
+                    SHMAP_DEBUG_LOG("ShmHashTable[%zd] from READY to ACCESSING!", idx);
 
                     // Maybe save old value
                     VALUE old{};
@@ -101,7 +101,7 @@ struct ShmHashTable {
 
                     Status status = ApplyVisitor(std::forward<Visitor>(visitor), oldPtr, (idx + probe) % CAPACITY, b.value, false);
 
-                    SHMAP_LOG("ShmHashTable[%zd] from ACCESSING to READY!", idx);
+                    SHMAP_DEBUG_LOG("ShmHashTable[%zd] from ACCESSING to READY!", idx);
                     b.state.store(Bucket::READY, std::memory_order_release);
                     return status;
                 }
@@ -112,29 +112,33 @@ struct ShmHashTable {
                     if (!b.state.compare_exchange_strong(expectState, Bucket::INSERTING,
                             std::memory_order_acq_rel, std::memory_order_acquire)) {
                         if (!backoff.next()) {
-                            SHMAP_LOG("ShmHashTable[%zd] backoff timeout!", idx);
+                            SHMAP_DEBUG_LOG("ShmHashTable[%zd] backoff timeout!", idx);
                             return Status::TIMEOUT;
                         }
                         continue;
                     }
 
-                    SHMAP_LOG("ShmHashTable[%zd] from EMPTY to INSERTING!", idx);
+                    SHMAP_DEBUG_LOG("ShmHashTable[%zd] from EMPTY to INSERTING!", idx);
 
-                    b.value = VALUE{}; // default construct value
+                    new (&b.value) VALUE{}; // default construct value
                     
                     VALUE oldDummy{};
-                    VALUE* oldPtr = ROLLBACK_ENABLE ? &oldDummy : nullptr;
+                    VALUE* oldPtr = nullptr;
+                    if constexpr (ROLLBACK_ENABLE) {
+                        oldPtr = &oldDummy;
+                    }
+
                     Status status = ApplyVisitor(std::forward<Visitor>(visitor), oldPtr, (idx + probe) % CAPACITY, b.value, true);
                     
                     if (!status) {
-                        SHMAP_LOG("ShmHashTable[%zd] from INSERTING to EMPTY!", idx);
+                        SHMAP_DEBUG_LOG("ShmHashTable[%zd] from INSERTING to EMPTY!", idx);
                         b.state.store(Bucket::EMPTY, std::memory_order_release);
                         return status;
                     }
 
                     b.key = key;
 
-                    SHMAP_LOG("ShmHashTable[%zd] from INSERTING to READY!", idx);
+                    SHMAP_DEBUG_LOG("ShmHashTable[%zd] from INSERTING to READY!", idx);
                     b.state.store(Bucket::READY, std::memory_order_release);
                     return Status::SUCCESS;
                 }
@@ -146,7 +150,7 @@ struct ShmHashTable {
 
                 // Otherwise waiting
                 if (!backoff.next()) {
-                    SHMAP_LOG("ShmHashTable[%zd] backoff timeout!", idx);
+                    SHMAP_DEBUG_LOG("ShmHashTable[%zd] backoff timeout!", idx);
                     return Status::TIMEOUT;
                 }
             }
@@ -261,7 +265,7 @@ private:
         std::size_t idx, VALUE& value, bool isNew) noexcept {
 
         Status result = ApplyVisitor(std::forward<Visitor>(visitor), idx, value, isNew);
-        if (ROLLBACK_ENABLE) {
+        if constexpr (ROLLBACK_ENABLE) {
             if (!result && oldValue) {
                 // roll back
                 value = *oldValue;

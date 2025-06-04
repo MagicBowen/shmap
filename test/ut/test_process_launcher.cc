@@ -19,7 +19,7 @@ TEST(ProcessLauncher, Basic) {
         std::cout << "[child2] first task\n";
     });
 
-    auto res1 = launcher.wait({p1, p2}, std::chrono::milliseconds(1000));
+    auto res1 = launcher.Wait({p1, p2}, std::chrono::milliseconds(1000));
     for (const auto& r : res1) {
         std::cout << r.name << " -> " << r.status << " (" << r.detail << ")\n";
     }
@@ -31,7 +31,7 @@ TEST(ProcessLauncher, Basic) {
         throw std::runtime_error("boom");
     });
 
-    auto res2 = launcher.wait({p1, p2}, std::chrono::milliseconds(1000));
+    auto res2 = launcher.Wait({p1, p2}, std::chrono::milliseconds(1000));
     for (const auto& r : res2) {
         std::cout << r.name << " -> " << r.status << " (" << r.detail << ")\n";
     }
@@ -48,7 +48,7 @@ TEST(ProcessLauncher, NormalAndException) {
         *((volatile int*)nullptr) = 1;
     });
 
-    auto r = launcher.wait({p1, p2, p3, p4}, std::chrono::milliseconds(500));
+    auto r = launcher.Wait({p1, p2, p3, p4}, std::chrono::milliseconds(500));
     ASSERT_EQ(r.size(), 4u);
 
     EXPECT_EQ(r[0].status, shmap::Status::SUCCESS);
@@ -66,7 +66,7 @@ TEST(ProcessLauncher, Timeout) {
         std::this_thread::sleep_for(std::chrono::seconds(2));
     });
 
-    auto r = launcher.wait({p}, std::chrono::milliseconds(300));
+    auto r = launcher.Wait({p}, std::chrono::milliseconds(300));
 
     ASSERT_EQ(r[0].status, shmap::Status::TIMEOUT);
     launcher.Stop(p);
@@ -132,7 +132,7 @@ TEST(ProcessLauncher, MonteCarloPiConcurrentHeavy) {
     }
 
     /* ---- 等待所有子进程任务结束（10s 超时） ---- */
-    auto res = launcher.wait(ps, std::chrono::seconds(10));
+    auto res = launcher.Wait(ps, std::chrono::seconds(10));
 
     /* ---- 断言执行状态 & 结果正确性 ---- */
     for (const auto& r : res) {

@@ -78,7 +78,7 @@ public:
 
     bool Dispatch(const Processor& p, ProcessTask task);
 
-    std::vector<TaskResult> wait(const std::vector<Processor>& ps, 
+    std::vector<TaskResult> Wait(const std::vector<Processor>& ps, 
         std::chrono::milliseconds timeout = std::chrono::milliseconds(1000));
 
     template<typename ...P>

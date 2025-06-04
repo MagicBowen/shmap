@@ -39,6 +39,8 @@ struct Status {
 
     constexpr uint32_t GetCode()    const noexcept { return static_cast<uint32_t>(code_); }
     constexpr operator uint32_t()   const noexcept { return static_cast<uint32_t>(code_); }
+    constexpr operator Code()       const noexcept { return code_; }
+
     constexpr operator bool()       const noexcept { return code_ == Code::SUCCESS; }
     constexpr bool     IsSuccess()  const noexcept { return code_ == Code::SUCCESS; }
     constexpr bool     IsFailed()   const noexcept { return code_ != Code::SUCCESS; }

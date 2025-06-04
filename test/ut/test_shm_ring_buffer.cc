@@ -86,7 +86,7 @@ TEST(ShmRingBufferTest, MultiProcessWithLauncher) {
     }
 
     /* ---- Wait for consumer to finish ---- */
-    auto res = launcher.wait({consumer}, std::chrono::seconds(10));
+    auto res = launcher.Wait({consumer}, std::chrono::seconds(10));
     ASSERT_EQ(res.size(), 1u);
     EXPECT_EQ(res[0].status, Status::SUCCESS) << res[0].detail;
 

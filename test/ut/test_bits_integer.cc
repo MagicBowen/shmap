@@ -26,8 +26,8 @@ TEST(ColorBitInteger, InvalidValue) {
     ASSERT_FALSE(color.IsValid());
     ASSERT_FALSE(color);
 
-    ASSERT_EQ(ColorBitInteger::INVALID().GetRawValue(), 0xFF); // Invalid value should be 0xFF
-    ASSERT_FALSE(ColorBitInteger::Verify(color.GetRawValue()));
+    ASSERT_EQ(ColorBitInteger::INVALID().GetValue(), 0xFF); // Invalid value should be 0xFF
+    ASSERT_FALSE(ColorBitInteger::Verify(color.GetValue()));
     ASSERT_TRUE(ColorBitInteger::Verify(0xEF)); // Verify with a valid value
     ASSERT_FALSE(ColorBitInteger::Verify(0xFF)); // Verify with an invalid value
 }
@@ -36,7 +36,7 @@ TEST(ColorBitInteger, BasicOperations) {
     ColorBitInteger color;
     
     // Test default construction
-    ASSERT_EQ(color.GetRawValue(), 0);
+    ASSERT_EQ(color.GetValue(), 0);
     
     // Test setting individual fields
     color.Set<ColorComponent::Red>(7);   // 3 bits, max value 7
@@ -51,10 +51,10 @@ TEST(ColorBitInteger, BasicOperations) {
     // Check the combined value
     // Red: 111 (7), Green: 101 (5), Blue: 11 (3)
     // Binary: 11101111 = 0xEF
-    ASSERT_EQ(color.GetRawValue(), 0xEF);
+    ASSERT_EQ(color.GetValue(), 0xEF);
     ASSERT_TRUE(color);
     ASSERT_TRUE(color.IsValid());
-    ASSERT_TRUE(ColorBitInteger::Verify(color.GetRawValue()));
+    ASSERT_TRUE(ColorBitInteger::Verify(color.GetValue()));
     ASSERT_NE(color, ColorBitInteger::INVALID());
 }
 
@@ -129,10 +129,10 @@ TEST(ColorBitInteger, FieldOverflow) {
 
 TEST(ColorBitInteger, Clear) {
     ColorBitInteger color(0xFF);
-    EXPECT_NE(color.GetRawValue(), 0);
+    EXPECT_NE(color.GetValue(), 0);
     
     color.Clear();
-    ASSERT_EQ(color.GetRawValue(), 0);
+    ASSERT_EQ(color.GetValue(), 0);
     ASSERT_EQ(color.Get<ColorComponent::Red>(), 0);
     ASSERT_EQ(color.Get<ColorComponent::Green>(), 0);
     ASSERT_EQ(color.Get<ColorComponent::Blue>(), 0);
@@ -176,7 +176,7 @@ TEST(StatusRegister, FlagOperations) {
     // Check combined value
     // Bits 0-3: 1011 (carry=1, zero=1, sign=0, overflow=1)
     // Bits 8-11: 1010 (interrupt=0xA)
-    ASSERT_EQ(status.GetRawValue(), 0x0A0B);
+    ASSERT_EQ(status.GetValue(), 0x0A0B);
 }
 
 
@@ -208,7 +208,7 @@ TEST(VirtualAddress, LargeFieldOperations) {
     ASSERT_EQ(addr.Get<MemoryAddress::Directory>(), 0x9ABC);
     
     uint64_t expected = (uint64_t(0x9ABC) << 48) | (uint64_t(0x5678) << 32) | (0x1234 << 12) | 0xABC;
-    ASSERT_EQ(addr.GetRawValue(), expected);
+    ASSERT_EQ(addr.GetValue(), expected);
 }
 
 // Test edge cases
@@ -220,11 +220,11 @@ TEST(BitsInteger, EdgeCases) {
     
     SingleBitField flag;
     flag.Set<SingleBit::Flag>(1);
-    ASSERT_EQ(flag.GetRawValue(), 0x80);
+    ASSERT_EQ(flag.GetValue(), 0x80);
     ASSERT_EQ(flag.Get<SingleBit::Flag>(), 1);
     
     flag.Set<SingleBit::Flag>(0);
-    ASSERT_EQ(flag.GetRawValue(), 0x00);
+    ASSERT_EQ(flag.GetValue(), 0x00);
     ASSERT_EQ(flag.Get<SingleBit::Flag>(), 0);
 }
 
@@ -300,7 +300,7 @@ TEST(GraphNodeId, ComprehensiveOperations) {
     EXPECT_EQ(id.Get<IdOffset::NodeId>(), 0xFFFF);
     EXPECT_EQ(id.Get<IdOffset::RegisterId>(), 0xFF);
     EXPECT_EQ(id.Get<IdOffset::GraphId>(), 0xFF);
-    EXPECT_EQ(id.GetRawValue(), 0xFFFFFFFFu);
+    EXPECT_EQ(id.GetValue(), 0xFFFFFFFFu);
 }
 
 TEST(GraphNodeId, PartialUpdate) {
@@ -316,7 +316,7 @@ TEST(GraphNodeId, PartialUpdate) {
     EXPECT_EQ(id.Get<IdOffset::NodeId>(), 0x5678);     // Unchanged
     EXPECT_EQ(id.Get<IdOffset::RegisterId>(), 0xAB);    // Updated
     EXPECT_EQ(id.Get<IdOffset::GraphId>(), 0x12);       // Unchanged
-    EXPECT_EQ(id.GetRawValue(), 0x12AB5678u);
+    EXPECT_EQ(id.GetValue(), 0x12AB5678u);
 }
 
 TEST(GraphNodeId, OverflowBehavior) {
@@ -344,9 +344,9 @@ TEST(GraphNodeId, BitwiseOperations) {
     id2.Set<IdOffset::NodeId>(0x0F0F);
     
     // Perform bitwise operations on raw values
-    uint32_t and_result = id1.GetRawValue() & id2.GetRawValue();
-    uint32_t or_result = id1.GetRawValue() | id2.GetRawValue();
-    uint32_t xor_result = id1.GetRawValue() ^ id2.GetRawValue();
+    uint32_t and_result = id1.GetValue() & id2.GetValue();
+    uint32_t or_result = id1.GetValue() | id2.GetValue();
+    uint32_t xor_result = id1.GetValue() ^ id2.GetValue();
     
     GraphNodeId id_and(and_result);
     GraphNodeId id_or(or_result);
@@ -384,7 +384,7 @@ TEST(GraphNodeId, SequentialIds) {
     // Verify uniqueness
     std::set<uint32_t> unique_values;
     for (const auto& id : ids) {
-        unique_values.insert(id.GetRawValue());
+        unique_values.insert(id.GetValue());
     }
     EXPECT_EQ(unique_values.size(), ids.size());
 }
@@ -433,7 +433,7 @@ TEST(BitFieldCompileTime, NonOverlappingFields) {
     good.Set<GoodEnum::Third>(0x33);
     good.Set<GoodEnum::Fourth>(0x44);
     
-    EXPECT_EQ(good.GetRawValue(), 0x44332211u);
+    EXPECT_EQ(good.GetValue(), 0x44332211u);
 }
 
 // Test edge case: single bit fields at type boundaries
@@ -449,7 +449,7 @@ TEST(BitFieldEdgeCase, TypeBoundaryFields) {
     FlagBitField flags;
     flags.Set<Flags::LastBit>(1).Set<Flags::FirstBit>(1);
 
-    EXPECT_EQ(flags.GetRawValue(), 0x81u);  // 10000001
+    EXPECT_EQ(flags.GetValue(), 0x81u);  // 10000001
 }
 
 // These tests verify that the compile-time checks work correctly
