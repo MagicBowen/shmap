@@ -19,6 +19,7 @@ uint32_t ProcessLauncher::addTask(const ProcessTask& f) {
         throw std::runtime_error("task overflow");
     }
     new (store_->at(id)) ProcessTask(f);
+    std::atomic_thread_fence(std::memory_order_release);
     return id;
 }
 
@@ -140,6 +141,8 @@ void ProcessLauncher::ChildLoop(int cmdR, int resW, SharedStore* store) {
         if (n != sizeof(cmd)) {
             break;
         }
+
+        std::atomic_thread_fence(std::memory_order_acquire);
 
         if (cmd.type == ProcessCmdType::STOP) {
              break;

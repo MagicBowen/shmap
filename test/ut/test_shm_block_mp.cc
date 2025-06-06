@@ -36,6 +36,7 @@ protected:
         int fd = shm_open(SHM_PATH, O_CREAT|O_RDWR, 0600);
         ASSERT_NE(-1, fd);
 
+        // TODO: test fail because of ftruncate_ret == -1!!!
         int ftruncate_ret = ftruncate(fd, Block::GetMemUsage());
         ASSERT_EQ(0, ftruncate_ret);
 
@@ -89,15 +90,15 @@ protected:
         for(auto& t:theadGroup) {
             t.join();
         }
-        _exit(0);
+        exit(0);
     }
 
 protected:
     void* sharedMem_{nullptr};
 };
-    
-TEST_F(ShmBlockMpTest, shm_block_multi_process_race_test) 
-{
+
+// TODO : fix test fail because of spin lock deadloop!!!
+TEST_F(ShmBlockMpTest, shm_block_multi_process_race_test) {
     for(int i = 0; i < N_PROC; ++i){
         pid_t pid = fork();
         if(pid==0) WorkerProcess();
