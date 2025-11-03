@@ -46,9 +46,9 @@ struct ShmVector {
                 return std::nullopt;
             }
         } while (!size_.compare_exchange_weak(
-            old, old + n, 
-            std::memory_order_acq_rel, 
-            std::memory_order_relaxed
+            old, old + n,
+            std::memory_order_acq_rel,
+            std::memory_order_acquire
         ));
         return old;        
     }

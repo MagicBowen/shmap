@@ -22,7 +22,8 @@ struct Backoff {
             std::this_thread::yield();
         } else {
             int  expected = std::min(spin_ - YIELD_LIMIT, MAX_BACKOFF_EXP);
-            auto nanos = std::chrono::nanoseconds(1LL << expected);
+            // Cap at 1ms to prevent overflow and excessive delays
+            auto nanos = std::chrono::nanoseconds(std::min(1LL << expected, 1'000'000LL));
             std::this_thread::sleep_for(nanos);
         }
         ++spin_;

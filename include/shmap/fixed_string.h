@@ -28,6 +28,11 @@ struct FixedString {
         FixedString fs;
         std::memset(fs.chars_.data(), 0, FIXED_STRING_LEN_MAX);
 
+        if (!fmt) {
+            fs.chars_[0] = '\0';
+            return fs;
+        }
+
         va_list args;
         va_start(args, fmt);
         int n = std::vsnprintf(fs.chars_.data(), FIXED_STRING_LEN_MAX, fmt, args);

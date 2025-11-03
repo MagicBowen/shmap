@@ -6,6 +6,7 @@
 #define SHMAP_SHM_RING_BUFFER_H
 
 #include "shmap/shmap.h"
+#include "shmap/backoff.h"
 
 #include <array>
 #include <atomic>
@@ -13,6 +14,7 @@
 #include <cstddef>
 #include <optional>
 #include <type_traits>
+#include <thread>
 
 namespace shmap {
 
@@ -107,7 +109,7 @@ struct ShmSpMcRingBuffer {
 
             if (diff == 0) {// empty cell
                 if (tail_.compare_exchange_weak(pos, pos + 1,
-                        std::memory_order_relaxed, std::memory_order_relaxed)) {
+                        std::memory_order_acq_rel, std::memory_order_acquire)) {
                     c.data = v;
                     c.seq.store(pos + 1, std::memory_order_release);
                     return true;
@@ -130,7 +132,7 @@ struct ShmSpMcRingBuffer {
 
             if (diff == 0) { // has data to be read
                 if (head_.compare_exchange_weak(pos, pos + 1,
-                        std::memory_order_relaxed, std::memory_order_relaxed)) {
+                        std::memory_order_acq_rel, std::memory_order_acquire)) {
                     T v = c.data;
                     c.seq.store(pos + N, std::memory_order_release); // mark empty
                     return v;
@@ -210,8 +212,12 @@ struct BroadcastRingBuffer {
         const std::size_t pos = tail_.fetch_add(1, std::memory_order_relaxed);
         Slot& slot = slots_[pos & (N - 1)];
 
+        // Use backoff to avoid busy-waiting
+        Backoff backoff(std::chrono::milliseconds(100));
         while (slot.remain.load(std::memory_order_acquire) != 0) {
-            std::this_thread::yield();
+            if (!backoff.next()) {
+                return false; // Timeout
+            }
         }
 
         slot.data = v;

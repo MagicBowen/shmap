@@ -150,7 +150,7 @@ private:
             throw std::runtime_error("shm_open failed: " + std::to_string(e));
         }
 
-        void* addr_ = ::mmap(nullptr, memBytes_, PROT_READ | PROT_WRITE, MAP_SHARED, fd_, 0);
+        addr_ = ::mmap(nullptr, memBytes_, PROT_READ | PROT_WRITE, MAP_SHARED, fd_, 0);
         if (addr_ == MAP_FAILED) {
             int e = errno;
             ::close(fd_);
